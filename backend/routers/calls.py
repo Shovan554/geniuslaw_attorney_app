@@ -14,6 +14,7 @@ from services.calls_service import (
     delete_call_for_user,
     end_call_for_user,
     get_call_history_for_user,
+    get_call_status_for_user,
     initiate_call_for_attorney,
     list_callable_clients_for_attorney,
 )
@@ -65,6 +66,25 @@ def end_call(
 ) -> dict:
     final_status = end_call_for_user(call_id, user_id, body.end_reason)
     return {"ok": True, "status": final_status}
+
+
+@router.get("/{call_id}/status")
+def call_status(
+    call_id: str,
+    user_id: int = Depends(_user_id_from_token),
+) -> dict:
+    """Return the current status of a call (e.g. 'initiated', 'answered',
+    'rejected', 'missed', 'cancelled', 'completed').
+
+    The attorney call screen polls this while waiting for the callee. It
+    is the source of truth for non-Daily lifecycle transitions — Daily's
+    `participant-joined` / `participant-left` events only cover the case
+    where the callee actually joined the room, but they're silent when
+    the callee declines from a killed app or when the server-side ring
+    timeout fires.
+    """
+    status = get_call_status_for_user(call_id, user_id)
+    return {"ok": True, "status": status}
 
 
 @router.delete("/{call_id}")

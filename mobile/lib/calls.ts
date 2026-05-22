@@ -120,3 +120,11 @@ export async function endCall(
 export async function deleteCall(callId: string): Promise<Result<{ ok: boolean }>> {
   return request<{ ok: boolean }>(`/calls/${callId}`, { method: 'DELETE' });
 }
+
+export async function getCallStatus(
+  callId: string,
+): Promise<Result<{ ok: boolean; status: CallStatus }>> {
+  return request<{ ok: boolean; status: CallStatus }>(`/calls/${callId}/status`, {
+    method: 'GET',
+  });
+}

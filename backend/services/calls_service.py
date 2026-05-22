@@ -449,6 +449,30 @@ def accept_call_for_user(call_id: str, user_id: int) -> AcceptCallResponse:
 _TERMINAL_CALL_STATUSES = {"completed", "rejected", "cancelled", "missed", "failed"}
 
 
+def get_call_status_for_user(call_id: str, user_id: int) -> str:
+    """Return the current `status` field of a call, with auth: the caller
+    must be one of the two participants. Used by the polling loop in the
+    attorney call screen to detect callee-side accept/decline/timeout
+    transitions when Daily's participant events don't fire."""
+    sb = get_supabase()
+    resp = (
+        sb.table("calls")
+        .select("caller_user_id, callee_user_id, status")
+        .eq("id", call_id)
+        .limit(1)
+        .execute()
+    )
+    rows = resp.data or []
+    if not rows:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Call not found.")
+    call = rows[0]
+    if int(call["caller_user_id"]) != user_id and int(call["callee_user_id"]) != user_id:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=403, detail="Not your call.")
+    return str(call.get("status") or "")
+
+
 def end_call_for_user(call_id: str, user_id: int, end_reason: str) -> str:
     sb = get_supabase()
     resp = (

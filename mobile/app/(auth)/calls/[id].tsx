@@ -11,7 +11,7 @@ import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { fonts, radius, spacing } from '../../../constants/theme';
 import { useTheme } from '../../../contexts/ThemeContext';
-import { endCall as endCallApi } from '../../../lib/calls';
+import { endCall as endCallApi, getCallStatus } from '../../../lib/calls';
 
 type Status = 'connecting' | 'ringing' | 'connected' | 'ended';
 
@@ -81,12 +81,62 @@ export default function InCallScreen() {
     [callId, calleeName],
   );
 
+  // Pin reportEnded into a ref so the Daily-setup useEffect below can call
+  // the latest version WITHOUT being re-run when reportEnded's identity
+  // changes (which it does whenever calleeName updates from an async
+  // lookup). If that effect re-ran, its cleanup would destroy the Daily
+  // call object mid-join, which fires an error → reportEnded('cancelled_
+  // before_answer') → the call ends the instant the callee gets the ring.
+  const reportEndedRef = useRef(reportEnded);
+  useEffect(() => {
+    reportEndedRef.current = reportEnded;
+  }, [reportEnded]);
+
   const syncParticipants = useCallback((co: DailyCall) => {
     const ps = co.participants();
     setLocalParticipant(ps.local ?? null);
     const remote = Object.values(ps).find((p) => !p.local) ?? null;
     setRemoteParticipant(remote);
   }, []);
+
+  // Poll the server-side call status while waiting for the callee. Daily's
+  // participant-joined/-left events only fire when the callee actually
+  // makes it into the room; they're silent on declines from a killed app
+  // and on server-side ring timeouts. This poll catches those.
+  useEffect(() => {
+    if (status === 'connected' || status === 'ended') return;
+    if (endingRef.current) return;
+    let cancelled = false;
+    const tick = async () => {
+      if (cancelled || endingRef.current) return;
+      try {
+        const res = await getCallStatus(callId);
+        if (cancelled || endingRef.current) return;
+        if (!res.ok) return;
+        const remoteStatus = res.data.status;
+        if (remoteStatus === 'rejected') {
+          reportEnded('declined');
+        } else if (remoteStatus === 'missed') {
+          reportEnded('timeout');
+        } else if (remoteStatus === 'cancelled') {
+          reportEndedRef.current('cancelled_before_answer');
+        } else if (remoteStatus === 'completed' || remoteStatus === 'failed') {
+          reportEnded('failed');
+        }
+        // 'answered' / 'initiated' / 'ringing' = keep waiting; Daily's
+        // participant-joined will move us to 'connected' once the callee
+        // actually arrives in the room.
+      } catch {
+        // best-effort; transient network errors are fine
+      }
+    };
+    const interval = setInterval(tick, 2000);
+    tick(); // fire immediately so we don't wait the first 2s
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [callId, status, reportEnded]);
 
   useEffect(() => {
     if (!roomUrl || !meetingToken) {
@@ -121,7 +171,7 @@ export default function InCallScreen() {
     const onParticipantLeft = (e: any) => {
       syncParticipants(co);
       if (e?.participant?.local === false) {
-        reportEnded('callee_hangup');
+        reportEndedRef.current('callee_hangup');
       }
     };
     const onError = (e: any) => {
@@ -139,12 +189,12 @@ export default function InCallScreen() {
       // the real reason (client decline → status 'rejected') so call history
       // shows "Client declined" correctly.
       if (meetingEnded && !connectedAtRef.current) {
-        reportEnded('cancelled_before_answer');
+        reportEndedRef.current('cancelled_before_answer');
         return;
       }
 
       Alert.alert('Call error', String(msg), [
-        { text: 'OK', onPress: () => reportEnded('failed') },
+        { text: 'OK', onPress: () => reportEndedRef.current('failed') },
       ]);
     };
     const onLeft = () => {
@@ -163,7 +213,7 @@ export default function InCallScreen() {
 
     co.join({ url: roomUrl, token: meetingToken }).catch((err) => {
       Alert.alert('Could not join call', err?.message || String(err), [
-        { text: 'OK', onPress: () => reportEnded('failed') },
+        { text: 'OK', onPress: () => reportEndedRef.current('failed') },
       ]);
     });
 
@@ -177,7 +227,11 @@ export default function InCallScreen() {
       } catch {}
       callRef.current = null;
     };
-  }, [roomUrl, meetingToken, isVideoCall, reportEnded, syncParticipants]);
+    // Daily setup intentionally runs once per (room, token) pair. We
+    // deliberately omit `reportEnded` from deps and call it via
+    // `reportEndedRef.current(...)` instead — see comment above the ref.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomUrl, meetingToken, isVideoCall, syncParticipants]);
 
   const handleMuteToggle = useCallback(() => {
     const co = callRef.current;
