@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "a61cf272-c864-471c-bb29-d9baef068171"
+      }
+    },
+    "ios": {
+      "bundleIdentifier": "com.geniuslaw.attorney",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    }
+  }
+}

@@ -12,21 +12,10 @@
       "distribution": "internal"
     },
     "production": {
-      "autoIncrement": true,
-      "ios": {
-        "image": "latest"
-      }
+      "autoIncrement": true
     }
   },
   "submit": {
-    "production": {
-      "ios": {
-        "appleTeamId": "AN88G7JG7A"
-      },
-      "android": {
-        "serviceAccountKeyPath": "./play-store.json",
-        "track": "production"
-      }
-    }
+    "production": {}
   }
 }
