@@ -2,6 +2,7 @@
   "expo": {
     "name": "GeniusLaw Attorney",
     "slug": "geniuslaw-attorney",
+    "owner": "geniuslaw",
     "version": "1.0.0",
     "scheme": "geniuslawattorney",
     "orientation": "portrait",
@@ -61,7 +62,10 @@
       ]
     ],
     "extra": {
-      "router": {}
+      "router": {},
+      "eas": {
+        "projectId": "13c7971c-46ec-40ea-861f-dc93cd14a86c"
+      }
     }
   }
 }
