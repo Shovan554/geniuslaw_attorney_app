@@ -7,11 +7,16 @@ import Daily, {
 } from '@daily-co/react-native-daily-js';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { fonts, radius, spacing } from '../../../constants/theme';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { endCall as endCallApi, getCallStatus } from '../../../lib/calls';
+import {
+  endProntoCall,
+  getProntoCallStatus,
+  wrapUpProntoCall,
+} from '../../../lib/pronto';
 
 type Status = 'connecting' | 'ringing' | 'connected' | 'ended';
 
@@ -36,12 +41,22 @@ export default function InCallScreen() {
     token: string;
     name?: string;
     video?: string;
+    pronto?: string;
   }>();
   const calleeName = params.name || 'Client';
   const callId = params.id;
   const roomUrl = params.url;
   const meetingToken = params.token;
   const isVideoCall = params.video === '1';
+  const isPronto = params.pronto === '1';
+
+  // Pronto wrap-up: after the attorney hangs up an answered Pronto call, the
+  // backend tells us `requires_wrap_up: true`. We then block this screen on
+  // a modal with Completed / Not completed — that decision is what flips
+  // pronto_retainer_signings.status to 'completed' or rolls it back to
+  // 'payment_completed' so the client can re-call.
+  const [wrapUpVisible, setWrapUpVisible] = useState(false);
+  const [wrapUpSubmitting, setWrapUpSubmitting] = useState(false);
 
   const [status, setStatus] = useState<Status>('connecting');
   const [muted, setMuted] = useState(false);
@@ -62,11 +77,27 @@ export default function InCallScreen() {
       setStatus('ended');
       const wasConnected = connectedAtRef.current != null;
       let finalStatus: string | null = null;
+      let needsWrapUp = false;
       try {
-        const res = await endCallApi(callId, reason);
-        if (res.ok) finalStatus = res.data.status;
+        if (isPronto) {
+          const res = await endProntoCall(callId, reason);
+          if (res.ok) {
+            finalStatus = res.data.status;
+            needsWrapUp = res.data.requires_wrap_up;
+          }
+        } else {
+          const res = await endCallApi(callId, reason);
+          if (res.ok) finalStatus = res.data.status;
+        }
       } catch {
         // best-effort
+      }
+      // Pronto: attorney needs to flag the call as 'completed' / 'not completed'
+      // so the signing's status can settle. Block the screen on a modal until
+      // they choose — only when the call actually connected.
+      if (needsWrapUp) {
+        setWrapUpVisible(true);
+        return;
       }
       // If the callee declined before answering, show "Call declined" so the
       // attorney sees explicit feedback instead of silently returning.
@@ -78,7 +109,7 @@ export default function InCallScreen() {
       }
       router.back();
     },
-    [callId, calleeName],
+    [callId, calleeName, isPronto],
   );
 
   // Pin reportEnded into a ref so the Daily-setup useEffect below can call
@@ -110,7 +141,9 @@ export default function InCallScreen() {
     const tick = async () => {
       if (cancelled || endingRef.current) return;
       try {
-        const res = await getCallStatus(callId);
+        const res = isPronto
+          ? await getProntoCallStatus(callId)
+          : await getCallStatus(callId);
         if (cancelled || endingRef.current) return;
         if (!res.ok) return;
         const remoteStatus = res.data.status;
@@ -136,7 +169,7 @@ export default function InCallScreen() {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [callId, status, reportEnded]);
+  }, [callId, status, reportEnded, isPronto]);
 
   useEffect(() => {
     if (!roomUrl || !meetingToken) {
@@ -455,6 +488,94 @@ export default function InCallScreen() {
           <Ionicons name="call" size={26} color="#FFFFFF" style={styles.endIcon} />
         </Pressable>
       </View>
+
+      {/* Pronto wrap-up — themed Modal (never Alert.alert; see attorney_no_native_alerts memory). */}
+      <Modal
+        visible={wrapUpVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {}}
+      >
+        <View style={styles.wrapUpBackdrop}>
+          <View
+            style={[
+              styles.wrapUpCard,
+              { backgroundColor: colors.card, borderColor: colors.cardBorder },
+            ]}
+          >
+            <Text
+              style={[
+                styles.wrapUpTitle,
+                { color: colors.text, fontFamily: fonts.sansBold },
+              ]}
+            >
+              Call ended
+            </Text>
+            <Text
+              style={[
+                styles.wrapUpBody,
+                { color: colors.textMuted, fontFamily: fonts.sans },
+              ]}
+            >
+              Did you complete this consultation with {calleeName}? If not, the
+              client can reach back out and call you again.
+            </Text>
+
+            {wrapUpSubmitting ? (
+              <ActivityIndicator color={colors.accent} style={{ marginTop: spacing.lg }} />
+            ) : (
+              <View style={styles.wrapUpBtnRow}>
+                <Pressable
+                  onPress={async () => {
+                    if (wrapUpSubmitting) return;
+                    setWrapUpSubmitting(true);
+                    await wrapUpProntoCall(callId, 'not_completed');
+                    setWrapUpSubmitting(false);
+                    setWrapUpVisible(false);
+                    router.back();
+                  }}
+                  style={({ pressed }) => [
+                    styles.wrapUpBtnSecondary,
+                    { borderColor: colors.cardBorder, opacity: pressed ? 0.7 : 1 },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.wrapUpBtnSecondaryLabel,
+                      { color: colors.text, fontFamily: fonts.sansSemiBold },
+                    ]}
+                  >
+                    Not completed
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={async () => {
+                    if (wrapUpSubmitting) return;
+                    setWrapUpSubmitting(true);
+                    await wrapUpProntoCall(callId, 'completed');
+                    setWrapUpSubmitting(false);
+                    setWrapUpVisible(false);
+                    router.back();
+                  }}
+                  style={({ pressed }) => [
+                    styles.wrapUpBtnPrimary,
+                    { backgroundColor: colors.accent, opacity: pressed ? 0.85 : 1 },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.wrapUpBtnPrimaryLabel,
+                      { color: colors.background, fontFamily: fonts.sansBold },
+                    ]}
+                  >
+                    Completed
+                  </Text>
+                </Pressable>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -540,4 +661,38 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   endIcon: { transform: [{ rotate: '135deg' }] },
+
+  wrapUpBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.lg,
+  },
+  wrapUpCard: {
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    padding: spacing.lg,
+  },
+  wrapUpTitle: { fontSize: 18, marginBottom: spacing.sm },
+  wrapUpBody: { fontSize: 14, lineHeight: 20 },
+  wrapUpBtnRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.lg,
+  },
+  wrapUpBtnSecondary: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  wrapUpBtnSecondaryLabel: { fontSize: 15 },
+  wrapUpBtnPrimary: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
+    alignItems: 'center',
+  },
+  wrapUpBtnPrimaryLabel: { fontSize: 15 },
 });

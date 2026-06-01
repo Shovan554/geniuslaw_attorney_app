@@ -20,6 +20,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.geniuslaw.attorney",
+      "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSMicrophoneUsageDescription": "GeniusLaw Attorney uses your microphone for in-app voice calls with clients.",
@@ -32,11 +33,18 @@
     },
     "android": {
       "package": "com.geniuslaw.attorney",
+      "googleServicesFile": "./google-services.json",
       "permissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.BLUETOOTH_CONNECT",
-        "android.permission.CAMERA"
+        "android.permission.CAMERA",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.WAKE_LOCK",
+        "android.permission.READ_PHONE_STATE",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_PHONE_CALL",
+        "android.permission.MANAGE_OWN_CALLS"
       ]
     },
     "web": {
@@ -47,11 +55,13 @@
       "expo-secure-store",
       "expo-font",
       "expo-dev-client",
+      "expo-notifications",
       [
         "expo-build-properties",
         {
           "ios": {
-            "deploymentTarget": "15.1"
+            "deploymentTarget": "15.1",
+            "useFrameworks": "static"
           },
           "android": {
             "minSdkVersion": 24,
@@ -59,7 +69,15 @@
             "targetSdkVersion": 35
           }
         }
-      ]
+      ],
+      "@config-plugins/react-native-callkeep",
+      "./plugins/withVoipPush",
+      "@react-native-firebase/app",
+      "@react-native-firebase/messaging",
+      "./plugins/withFcmNotificationMeta",
+      "./plugins/withAllowNonModularIncludes",
+      "./plugins/withFirebaseModularHeaders",
+      "@react-native-community/datetimepicker"
     ],
     "extra": {
       "router": {},

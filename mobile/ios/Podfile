@@ -23,6 +23,14 @@ prepare_react_native_project!
 target 'GeniusLawAttorney' do
   use_expo_modules!
 
+  # >>> withFirebaseModularHeaders
+  # Firebase iOS SDK v11+ ships FirebaseCoreInternal as a Swift pod that depends
+  # on GoogleUtilities. With useFrameworks: 'static', CocoaPods refuses to
+  # integrate a Swift pod unless its dependencies expose modular headers, so
+  # we opt every pod into modular headers globally.
+  use_modular_headers!
+  # <<< withFirebaseModularHeaders
+
   if ENV['EXPO_USE_COMMUNITY_AUTOLINKING'] == '1'
     config_command = ['node', '-e', "process.argv=['', '', 'config'];require('@react-native-community/cli').run()"];
   else
@@ -59,5 +67,28 @@ target 'GeniusLawAttorney' do
       :mac_catalyst_enabled => false,
       :ccache_enabled => ccache_enabled?(podfile_properties),
     )
+
+    # >>> withAllowNonModularIncludes
+    installer.pods_project.targets.each do |target|
+      target.build_configurations.each do |build_config|
+        build_config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
+      end
+      # RNFirebase + useFrameworks:static + prebuilt React-Core XCFramework breaks because
+      # React-Core headers get module-imported (which doesn't bring macros like RCT_EXTERN /
+      # RCT_EXPORT_MODULE into the TU) and any later textual include is skipped. Also
+      # RNFBApp's umbrella + "module * { export * }" claims React-Core typedefs as
+      # submodule-owned, producing 'must be imported from module RNFBApp.RNFBAppModule' errors.
+      # Fix: disable Clang modules for the RNFirebase pods so all <React/...> imports become
+      # textual — macros resolve, no submodule ownership conflict. The framework binary is
+      # still produced; only the modulemap is suppressed for these targets.
+      if target.name.start_with?('RNFB')
+        target.build_configurations.each do |build_config|
+          build_config.build_settings['CLANG_ENABLE_MODULES'] = 'NO'
+          build_config.build_settings['DEFINES_MODULE'] = 'NO'
+        end
+      end
+    end
+    # <<< withAllowNonModularIncludes
+
   end
 end

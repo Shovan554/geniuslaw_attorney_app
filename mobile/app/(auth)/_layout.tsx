@@ -1,4 +1,4 @@
-import { Redirect, Stack } from 'expo-router';
+import { Redirect, Stack, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   useFonts,
@@ -7,9 +7,12 @@ import {
   Manrope_600SemiBold,
   Manrope_700Bold,
 } from '@expo-google-fonts/manrope';
-import { hasSession } from '../../lib/auth';
+import { getStoredUser, hasSession } from '../../lib/auth';
+import { initCallKit } from '../../lib/callKit';
+import { attachTapListener, registerForPushNotifications } from '../../lib/notifications';
 
 export default function AuthLayout() {
+  const router = useRouter();
   const [authed, setAuthed] = useState<boolean | null>(null);
   const [fontsLoaded] = useFonts({
     Manrope_400Regular,
@@ -21,6 +24,20 @@ export default function AuthLayout() {
   useEffect(() => {
     hasSession().then(setAuthed);
   }, []);
+
+  useEffect(() => {
+    if (!authed) return;
+    void registerForPushNotifications();
+    // Pronto CallKit + PushKit / RNCallKeep + FCM wiring. Native modules
+    // are loaded lazily inside initCallKit so this is safe to call even
+    // in a dev client that pre-dates the EAS rebuild — it just warns and
+    // falls back to the existing in-app active-calls poll.
+    void getStoredUser().then((u) => {
+      if (u?.id) void initCallKit(u.id);
+    });
+    const sub = attachTapListener(router);
+    return () => sub.remove();
+  }, [authed, router]);
 
   if (authed === null || !fontsLoaded) return null;
   if (!authed) return <Redirect href="/login" />;
@@ -34,6 +51,9 @@ export default function AuthLayout() {
       }}
     >
       <Stack.Screen name="dashboard" />
+      <Stack.Screen name="pronto" />
+      <Stack.Screen name="retainers" />
+      <Stack.Screen name="signings" />
       <Stack.Screen name="cases" />
       <Stack.Screen name="clients" />
       <Stack.Screen name="messages" />

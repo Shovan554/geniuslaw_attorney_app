@@ -34,12 +34,13 @@ type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 type NavItem = {
   label: string;
   icon: IoniconsName;
-  path: '/(auth)/dashboard' | '/(auth)/cases' | '/(auth)/clients' | '/(auth)/messages' | '/(auth)/calls' | '/(auth)/profile';
+  path: '/(auth)/dashboard' | '/(auth)/pronto' | '/(auth)/cases' | '/(auth)/clients' | '/(auth)/messages' | '/(auth)/calls' | '/(auth)/profile';
   match: string;
 };
 
 const NAV: NavItem[] = [
   { label: 'Dashboard', icon: 'grid-outline', path: '/(auth)/dashboard', match: '/dashboard' },
+  { label: 'Pronto', icon: 'flash-outline', path: '/(auth)/pronto', match: '/pronto' },
   { label: 'Cases', icon: 'briefcase-outline', path: '/(auth)/cases', match: '/cases' },
   { label: 'My Clients', icon: 'people-outline', path: '/(auth)/clients', match: '/clients' },
   { label: 'Messages', icon: 'chatbubbles-outline', path: '/(auth)/messages', match: '/messages' },
