@@ -182,6 +182,20 @@ export default function ProfileIndex() {
                 </View>
               </Card>
             </Animated.View>
+
+            <Animated.View entering={FadeInLeft.duration(360).delay(360)}>
+              <Card style={styles.cardSpacing} padding="md" onPress={() => router.push('/(auth)/profile/vault')}>
+                <View style={styles.actionRow}>
+                  <View style={[styles.iconWrap, { backgroundColor: colors.accentTint, borderColor: colors.accentBorder }]}>
+                    <Ionicons name="wallet-outline" size={18} color={colors.accent} />
+                  </View>
+                  <Text style={[styles.actionText, { color: colors.text, fontFamily: fonts.sansSemiBold }]}>
+                    Payment Vault
+                  </Text>
+                  <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+                </View>
+              </Card>
+            </Animated.View>
           </>
         ) : null}
       </ScrollView>

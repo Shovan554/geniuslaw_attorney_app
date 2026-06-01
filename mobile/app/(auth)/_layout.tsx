@@ -52,8 +52,6 @@ export default function AuthLayout() {
     >
       <Stack.Screen name="dashboard" />
       <Stack.Screen name="pronto" />
-      <Stack.Screen name="retainers" />
-      <Stack.Screen name="signings" />
       <Stack.Screen name="cases" />
       <Stack.Screen name="clients" />
       <Stack.Screen name="messages" />

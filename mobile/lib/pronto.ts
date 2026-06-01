@@ -455,3 +455,76 @@ export type ProntoTransactionsSummary = {
 export async function listProntoTransactions(): Promise<Result<ProntoTransactionsSummary>> {
   return request<ProntoTransactionsSummary>('GET', '/attorney/pronto/transactions');
 }
+
+// ---------------------------------------------------------------------------
+// Uber-style dispatch — open requests + first-come accept
+// ---------------------------------------------------------------------------
+
+export type OpenRequest = {
+  id: number;
+  client_name: string;
+  practice_area_name: string;
+  fee_amount_cents: number;
+  fee_currency: string;
+  signed_at: string | null;
+  paid_at: string | null;
+  attempt_count: number;
+};
+
+export async function listOpenRequests(): Promise<Result<OpenRequest[]>> {
+  return request<OpenRequest[]>('GET', '/attorney/pronto/requests/open');
+}
+
+export type AcceptRequestResult = {
+  request_id: number;
+  status: string;
+  client_id: number;
+  client_name: string;
+  practice_area_name: string;
+  accepted_at: string | null;
+};
+
+export async function acceptProntoRequest(
+  id: number,
+): Promise<Result<AcceptRequestResult>> {
+  return request<AcceptRequestResult>('POST', `/attorney/pronto/requests/${id}/accept`);
+}
+
+export type AttorneyRequestStatus =
+  | 'accepted'
+  | 'in_call'
+  | 'completed'
+  | 'cancelled';
+
+export type AttorneyRequestItem = {
+  id: number;
+  client_id: number;
+  client_name: string;
+  practice_area_name: string;
+  status: AttorneyRequestStatus;
+  fee_amount_cents: number;
+  fee_currency: string;
+  accepted_at: string | null;
+  in_call_at: string | null;
+  completed_at: string | null;
+  cancelled_at: string | null;
+  cancelled_by: 'client' | 'attorney' | null;
+  final_retainer_text: string | null;
+  has_retainer_doc: boolean;
+};
+
+export async function listMyProntoRequests(): Promise<Result<AttorneyRequestItem[]>> {
+  return request<AttorneyRequestItem[]>('GET', '/attorney/pronto/requests');
+}
+
+export type RetainerDocUrl = { url: string };
+
+// Signed URL to the completed retainer PDF (stored in the client's bucket).
+export async function getProntoRetainerDocUrl(
+  requestId: number,
+): Promise<Result<RetainerDocUrl>> {
+  return request<RetainerDocUrl>(
+    'GET',
+    `/attorney/pronto/requests/${requestId}/retainer-url`,
+  );
+}

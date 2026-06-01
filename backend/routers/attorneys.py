@@ -2,11 +2,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from middleware.auth_middleware import require_attorney_role
 from models.attorney import AttorneyProfile, AttorneyProfileUpdate
+from models.vault import VaultCard, VaultSetupBundle
+from services import stripe_service
 from services.supabase_client import get_supabase
 
 router = APIRouter(prefix="/attorneys", tags=["attorneys"])
 
-ATTORNEY_SELECT = "id,firm_id,full_name,email,phone,address,bar_number,title,bio,status"
+ATTORNEY_SELECT = "id,firm_id,full_name,email,phone,address,bar_number,title,bio,status,customer_id,card_brand,card_last4"
 
 
 def _fetch_user_email(user_id: int) -> str | None:
@@ -39,6 +41,17 @@ def _fetch_firm_name(firm_id: int) -> str | None:
 def _profile_from_row(row: dict) -> AttorneyProfile:
     firm_name = _fetch_firm_name(row["firm_id"])
     return AttorneyProfile(**row, firm_name=firm_name)
+
+
+def _current_attorney_row(token: dict) -> dict:
+    user_id = int(token["sub"])
+    email = _fetch_user_email(user_id)
+    if not email:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+    attorney = _fetch_attorney_by_email(email)
+    if not attorney:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attorney profile not found.")
+    return attorney
 
 
 @router.get("/me", response_model=AttorneyProfile)
@@ -109,3 +122,17 @@ def update_me(
     if not refreshed:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to load updated profile.")
     return _profile_from_row(refreshed)
+
+
+@router.post("/me/vault/setup", response_model=VaultSetupBundle)
+def vault_setup(token: dict = Depends(require_attorney_role)) -> VaultSetupBundle:
+    attorney = _current_attorney_row(token)
+    bundle = stripe_service.create_setup_bundle(attorney)
+    return VaultSetupBundle(**bundle)
+
+
+@router.get("/me/vault/card", response_model=VaultCard | None)
+def vault_card(token: dict = Depends(require_attorney_role)) -> VaultCard | None:
+    attorney = _current_attorney_row(token)
+    card = stripe_service.sync_saved_card(attorney)
+    return VaultCard(**card) if card else None

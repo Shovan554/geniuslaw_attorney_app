@@ -24,12 +24,9 @@ target 'GeniusLawAttorney' do
   use_expo_modules!
 
   # >>> withFirebaseModularHeaders
-  # Firebase iOS SDK v11+ ships FirebaseCoreInternal as a Swift pod that depends
-  # on GoogleUtilities. With useFrameworks: 'static', CocoaPods refuses to
-  # integrate a Swift pod unless its dependencies expose modular headers, so
-  # we opt every pod into modular headers globally.
   use_modular_headers!
   # <<< withFirebaseModularHeaders
+
 
   if ENV['EXPO_USE_COMMUNITY_AUTOLINKING'] == '1'
     config_command = ['node', '-e', "process.argv=['', '', 'config'];require('@react-native-community/cli').run()"];

@@ -12,7 +12,6 @@ static VoipPushBridge *_sharedBridge = nil;
 @implementation VoipPushBridge
 
 + (void)load {
-    NSLog(@"[VoipPushBridge] +load fired — class linked and runtime-loaded");
     // Defer real setup until the app finishes launching so the RN bridge
     // is alive by the time PushKit might fire a delegate call.
     [[NSNotificationCenter defaultCenter]
@@ -23,7 +22,6 @@ static VoipPushBridge *_sharedBridge = nil;
 }
 
 + (void)_applicationDidFinishLaunching:(NSNotification *)note {
-    NSLog(@"[VoipPushBridge] UIApplicationDidFinishLaunchingNotification received");
     if (_sharedBridge != nil) return;
     _sharedBridge = [[VoipPushBridge alloc] init];
     [_sharedBridge _startPushKit];
@@ -33,7 +31,6 @@ static VoipPushBridge *_sharedBridge = nil;
 }
 
 - (void)_startPushKit {
-    NSLog(@"[VoipPushBridge] _startPushKit — creating PKPushRegistry for VoIP");
     // We own the sole PKPushRegistry. Do NOT call
     // [RNVoipPushNotificationManager voipRegistration] — its implementation
     // creates a SECOND PKPushRegistry whose delegate is
@@ -45,7 +42,6 @@ static VoipPushBridge *_sharedBridge = nil;
     self.pushRegistry = [[PKPushRegistry alloc] initWithQueue:dispatch_get_main_queue()];
     self.pushRegistry.delegate = self;
     self.pushRegistry.desiredPushTypes = [NSSet setWithObject:PKPushTypeVoIP];
-    NSLog(@"[VoipPushBridge] PKPushRegistry initialised — waiting for APNs credentials");
 }
 
 #pragma mark - PKPushRegistryDelegate
@@ -53,20 +49,12 @@ static VoipPushBridge *_sharedBridge = nil;
 - (void)pushRegistry:(PKPushRegistry *)registry
     didUpdatePushCredentials:(PKPushCredentials *)credentials
                      forType:(PKPushType)type {
-    const unsigned char *bytes = (const unsigned char *)credentials.token.bytes;
-    NSMutableString *hex = [NSMutableString stringWithCapacity:credentials.token.length * 2];
-    for (NSUInteger i = 0; i < credentials.token.length; i++) {
-        [hex appendFormat:@"%02x", bytes[i]];
-    }
-    NSLog(@"[VoipPushBridge] didUpdatePushCredentials forType=%@ tokenLen=%lu prefix=%@",
-          type, (unsigned long)credentials.token.length, [hex substringToIndex:MIN(16, hex.length)]);
     [RNVoipPushNotificationManager didUpdatePushCredentials:credentials
                                                     forType:(NSString *)type];
 }
 
 - (void)pushRegistry:(PKPushRegistry *)registry
     didInvalidatePushTokenForType:(PKPushType)type {
-    NSLog(@"[VoipPushBridge] didInvalidatePushTokenForType=%@", type);
     // no-op; the backend will drop dead tokens on 410 GONE.
 }
 
@@ -74,8 +62,6 @@ static VoipPushBridge *_sharedBridge = nil;
     didReceiveIncomingPushWithPayload:(PKPushPayload *)payload
                               forType:(PKPushType)type
                 withCompletionHandler:(void (^)(void))completion {
-    NSLog(@"[VoipPushBridge] didReceiveIncomingPushWithPayload forType=%@ payload=%@",
-          type, payload.dictionaryPayload);
     NSDictionary *data = payload.dictionaryPayload;
     NSString *uuid = data[@"call_id"] ?: [[NSUUID UUID] UUIDString];
     NSString *callerName = data[@"caller_name"] ?: @"Caller";

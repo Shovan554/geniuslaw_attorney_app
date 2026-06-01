@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "486996807175",
+    "project_id": "geniuslaw-dbf0d",
+    "storage_bucket": "geniuslaw-dbf0d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:486996807175:android:19ad8231218a219223e4a2",
+        "android_client_info": {
+          "package_name": "com.geniuslaw.attorney"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBxLHtthgMe9GHqr4cnf19pxCoNGShIkn4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:486996807175:android:4bad80278ebfe91223e4a2",
+        "android_client_info": {
+          "package_name": "com.geniuslaw.client"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBxLHtthgMe9GHqr4cnf19pxCoNGShIkn4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
