@@ -98,3 +98,24 @@ def test_refresh_kyc_processing_does_not_persist(stripe_stub, supabase_stub):
     out = svc.refresh_kyc_status({"id": 7, "kyc_session_id": "vs_NEW", "kyc_verified": False})
     assert out == {"kyc_verified": False, "status": "processing"}
     supabase_stub.table.assert_not_called()
+
+
+def test_accept_terms_requires_kyc(supabase_stub):
+    import services.kyc_service as svc
+    with pytest.raises(svc.OnboardingError):
+        svc.accept_pronto_terms({"id": 7, "kyc_verified": False, "card_last4": "4242"})
+    supabase_stub.table.assert_not_called()
+
+
+def test_accept_terms_requires_card(supabase_stub):
+    import services.kyc_service as svc
+    with pytest.raises(svc.OnboardingError):
+        svc.accept_pronto_terms({"id": 7, "kyc_verified": True, "card_last4": None})
+    supabase_stub.table.assert_not_called()
+
+
+def test_accept_terms_persists_when_ready(supabase_stub):
+    import services.kyc_service as svc
+    out = svc.accept_pronto_terms({"id": 7, "kyc_verified": True, "card_last4": "4242"})
+    assert out == {"terms_accepted": True}
+    supabase_stub.table.assert_called_with("attorneys")

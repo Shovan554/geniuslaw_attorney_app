@@ -80,3 +80,22 @@ def refresh_kyc_status(attorney_row: dict) -> dict[str, Any]:
             {"kyc_verified": True}
         ).eq("id", attorney_row["id"]).execute()
     return {"kyc_verified": verified, "status": session.status}
+
+
+def accept_pronto_terms(attorney_row: dict) -> dict[str, bool]:
+    """Record Pronto platform-fee terms acceptance.
+
+    Guards that KYC is verified and a card is on file. Raises OnboardingError
+    when a prerequisite is missing. No charge is made — acceptance only.
+    """
+    status = compute_onboarding_status(attorney_row)
+    if not status["kyc_verified"]:
+        raise OnboardingError("Complete identity verification first.")
+    if not status["has_card"]:
+        raise OnboardingError("Add a payment method first.")
+
+    now = datetime.now(timezone.utc).isoformat()
+    get_supabase().table("attorneys").update(
+        {"pronto_terms_accepted": True, "pronto_terms_accepted_at": now}
+    ).eq("id", attorney_row["id"]).execute()
+    return {"terms_accepted": True}
