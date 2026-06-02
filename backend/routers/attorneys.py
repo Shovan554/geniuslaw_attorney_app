@@ -3,12 +3,19 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from middleware.auth_middleware import require_attorney_role
 from models.attorney import AttorneyProfile, AttorneyProfileUpdate
 from models.vault import VaultCard, VaultSetupBundle
+from models.onboarding import (
+    KycRefreshResult,
+    KycSessionBundle,
+    OnboardingStatus,
+    TermsAcceptResult,
+)
+from services import kyc_service
 from services import stripe_service
 from services.supabase_client import get_supabase
 
 router = APIRouter(prefix="/attorneys", tags=["attorneys"])
 
-ATTORNEY_SELECT = "id,firm_id,full_name,email,phone,address,bar_number,title,bio,status,customer_id,card_brand,card_last4"
+ATTORNEY_SELECT = "id,firm_id,full_name,email,phone,address,bar_number,title,bio,status,customer_id,card_brand,card_last4,pronto_enabled,kyc_verified,kyc_session_id,pronto_terms_accepted"
 
 
 def _fetch_user_email(user_id: int) -> str | None:
@@ -136,3 +143,31 @@ def vault_card(token: dict = Depends(require_attorney_role)) -> VaultCard | None
     attorney = _current_attorney_row(token)
     card = stripe_service.sync_saved_card(attorney)
     return VaultCard(**card) if card else None
+
+
+@router.get("/me/onboarding", response_model=OnboardingStatus)
+def onboarding_status(token: dict = Depends(require_attorney_role)) -> OnboardingStatus:
+    attorney = _current_attorney_row(token)
+    return OnboardingStatus(**kyc_service.compute_onboarding_status(attorney))
+
+
+@router.post("/me/kyc/session", response_model=KycSessionBundle)
+def kyc_session(token: dict = Depends(require_attorney_role)) -> KycSessionBundle:
+    attorney = _current_attorney_row(token)
+    return KycSessionBundle(**kyc_service.create_kyc_session(attorney))
+
+
+@router.post("/me/kyc/refresh", response_model=KycRefreshResult)
+def kyc_refresh(token: dict = Depends(require_attorney_role)) -> KycRefreshResult:
+    attorney = _current_attorney_row(token)
+    return KycRefreshResult(**kyc_service.refresh_kyc_status(attorney))
+
+
+@router.post("/me/pronto-terms/accept", response_model=TermsAcceptResult)
+def pronto_terms_accept(token: dict = Depends(require_attorney_role)) -> TermsAcceptResult:
+    attorney = _current_attorney_row(token)
+    try:
+        result = kyc_service.accept_pronto_terms(attorney)
+    except kyc_service.OnboardingError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+    return TermsAcceptResult(**result)
