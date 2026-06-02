@@ -64,3 +64,14 @@ def test_compute_onboarding_status_reads_flags_and_card():
 def test_compute_onboarding_status_blank_card_is_no_card():
     import services.kyc_service as svc
     assert svc.compute_onboarding_status({"card_last4": "  "})["has_card"] is False
+
+
+def test_create_kyc_session_shape_and_persist(stripe_stub, supabase_stub, monkeypatch):
+    import services.kyc_service as svc
+    monkeypatch.setenv("STRIPE_PUBLISHABLE_KEY", "pk_test_x")
+    row = {"id": 7, "email": "a@b.co"}
+    bundle = svc.create_kyc_session(row)
+    assert bundle == {"session_id": "vs_NEW", "ephemeral_key_secret": "ek_secret_123", "publishable_key": "pk_test_x"}
+    stripe_stub.identity.VerificationSession.create.assert_called_once()
+    stripe_stub.EphemeralKey.create.assert_called_once()
+    supabase_stub.table.assert_called_with("attorneys")

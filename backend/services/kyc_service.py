@@ -32,3 +32,30 @@ def compute_onboarding_status(attorney_row: dict) -> dict[str, bool]:
         "has_card": bool((attorney_row.get("card_last4") or "").strip()),
         "terms_accepted": bool(attorney_row.get("pronto_terms_accepted")),
     }
+
+
+def create_kyc_session(attorney_row: dict) -> dict[str, Any]:
+    """Create a Stripe Identity VerificationSession + ephemeral key for the app.
+
+    Persists the session id on the attorney row. Returns the bundle the mobile
+    Identity sheet needs: { session_id, ephemeral_key_secret, publishable_key }.
+    """
+    _configure()
+    session = stripe.identity.VerificationSession.create(
+        type="document",
+        options={"document": {"require_matching_selfie": True}},
+        provided_details={"email": (attorney_row.get("email") or "") or None},
+        metadata={"attorney_id": str(attorney_row["id"])},
+    )
+    ephemeral = stripe.EphemeralKey.create(
+        verification_session=session.id,
+        stripe_version="2024-06-20",
+    )
+    get_supabase().table("attorneys").update(
+        {"kyc_session_id": session.id}
+    ).eq("id", attorney_row["id"]).execute()
+    return {
+        "session_id": session.id,
+        "ephemeral_key_secret": ephemeral.secret,
+        "publishable_key": get_publishable_key(),
+    }
