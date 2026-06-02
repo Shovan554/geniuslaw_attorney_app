@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -16,7 +17,7 @@ import Animated, { Easing, FadeInDown, FadeInUp } from 'react-native-reanimated'
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppHeader } from '../../components/AppHeader';
 import { DocumentViewerModal } from '../../components/DocumentViewerModal';
-import { fonts, radius, spacing } from '../../constants/theme';
+import { AppColors, fonts, radius, spacing } from '../../constants/theme';
 import { useTheme } from '../../contexts/ThemeContext';
 import {
   Availability,
@@ -32,6 +33,12 @@ import {
   type OpenRequest,
   type ProntoActiveCall,
 } from '../../lib/pronto';
+
+type ModalState =
+  | { kind: 'confirm'; req: OpenRequest }
+  | { kind: 'accepted'; clientName: string; practiceArea: string; fee: string }
+  | { kind: 'unavailable'; message: string }
+  | null;
 
 function formatMoney(cents: number, currency: string): string {
   try {
@@ -68,6 +75,195 @@ function formatSince(iso: string | null): string {
   }
 }
 
+function ProntoActionSheet({
+  modal,
+  colors,
+  onDismiss,
+  onConfirmAccept,
+}: {
+  modal: ModalState;
+  colors: AppColors;
+  onDismiss: () => void;
+  onConfirmAccept: (req: OpenRequest) => void;
+}) {
+  if (!modal) return null;
+
+  const dangerTint = 'rgba(224,82,82,0.12)';
+  const dangerBorder = 'rgba(224,82,82,0.35)';
+  const successTint = 'rgba(76,175,125,0.12)';
+  const successBorder = 'rgba(76,175,125,0.35)';
+
+  const iconName =
+    modal.kind === 'confirm'
+      ? ('document-text-outline' as const)
+      : modal.kind === 'accepted'
+        ? ('checkmark-circle' as const)
+        : ('alert-circle-outline' as const);
+  const badgeBg =
+    modal.kind === 'confirm'
+      ? colors.accentTint
+      : modal.kind === 'accepted'
+        ? successTint
+        : dangerTint;
+  const badgeBorder =
+    modal.kind === 'confirm'
+      ? colors.accentBorder
+      : modal.kind === 'accepted'
+        ? successBorder
+        : dangerBorder;
+  const iconColor =
+    modal.kind === 'confirm'
+      ? colors.accent
+      : modal.kind === 'accepted'
+        ? colors.success
+        : colors.danger;
+  const title =
+    modal.kind === 'confirm'
+      ? 'Accept & sign retainer?'
+      : modal.kind === 'accepted'
+        ? 'Retainer signed'
+        : 'Request unavailable';
+
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={onDismiss} statusBarTranslucent>
+      <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+        <Pressable
+          style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.65)' }]}
+          onPress={onDismiss}
+        />
+        <Animated.View
+          entering={FadeInUp.duration(280)}
+          style={[sheetStyles.sheet, { backgroundColor: colors.card, borderTopColor: colors.cardBorder }]}
+        >
+          <View style={[sheetStyles.handle, { backgroundColor: colors.cardBorder }]} />
+
+          <View style={[sheetStyles.badge, { backgroundColor: badgeBg, borderColor: badgeBorder }]}>
+            <Ionicons name={iconName} size={32} color={iconColor} />
+          </View>
+
+          <Text style={[sheetStyles.title, { color: colors.text, fontFamily: fonts.heading }]}>
+            {title}
+          </Text>
+
+          {modal.kind === 'confirm' ? (
+            <>
+              <View style={[sheetStyles.infoBox, { backgroundColor: colors.background, borderColor: colors.cardBorder }]}>
+                <View style={sheetStyles.infoRow}>
+                  <Ionicons name="person-outline" size={14} color={colors.textMuted} />
+                  <Text style={[sheetStyles.infoText, { color: colors.text, fontFamily: fonts.sansMedium }]}>
+                    {modal.req.client_name}
+                  </Text>
+                </View>
+                <View style={[sheetStyles.infoDivider, { backgroundColor: colors.cardBorder }]} />
+                <View style={sheetStyles.infoRow}>
+                  <Ionicons name="briefcase-outline" size={14} color={colors.textMuted} />
+                  <Text style={[sheetStyles.infoText, { color: colors.text, fontFamily: fonts.sansMedium }]}>
+                    {modal.req.practice_area_name}
+                  </Text>
+                  <Text style={[sheetStyles.infoFee, { color: colors.accent, fontFamily: fonts.sansBold }]}>
+                    {formatMoney(modal.req.fee_amount_cents, modal.req.fee_currency)}
+                  </Text>
+                </View>
+              </View>
+              <Text style={[sheetStyles.hint, { color: colors.textMuted, fontFamily: fonts.sans }]}>
+                First to accept wins — the client will be charged once you sign.
+              </Text>
+              <View style={sheetStyles.btnRow}>
+                <Pressable
+                  onPress={onDismiss}
+                  style={({ pressed }) => [
+                    sheetStyles.btnOutlined,
+                    { borderColor: colors.cardBorder, opacity: pressed ? 0.7 : 1 },
+                  ]}
+                >
+                  <Text style={[sheetStyles.btnOutlinedLabel, { color: colors.text, fontFamily: fonts.sansSemiBold }]}>
+                    Cancel
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => onConfirmAccept(modal.req)}
+                  style={({ pressed }) => [
+                    sheetStyles.btnFilled,
+                    { backgroundColor: colors.accent, flex: 1, opacity: pressed ? 0.85 : 1 },
+                  ]}
+                >
+                  <Ionicons name="pencil-outline" size={16} color={colors.background} />
+                  <Text style={[sheetStyles.btnFilledLabel, { color: colors.background, fontFamily: fonts.sansBold }]}>
+                    Accept & Sign
+                  </Text>
+                </Pressable>
+              </View>
+            </>
+          ) : modal.kind === 'accepted' ? (
+            <>
+              <View style={[sheetStyles.infoBox, { backgroundColor: colors.background, borderColor: colors.cardBorder }]}>
+                <View style={sheetStyles.infoRow}>
+                  <Ionicons name="person-outline" size={14} color={colors.textMuted} />
+                  <Text style={[sheetStyles.infoText, { color: colors.text, fontFamily: fonts.sansMedium }]}>
+                    {modal.clientName}
+                  </Text>
+                </View>
+                <View style={[sheetStyles.infoDivider, { backgroundColor: colors.cardBorder }]} />
+                <View style={sheetStyles.infoRow}>
+                  <Ionicons name="briefcase-outline" size={14} color={colors.textMuted} />
+                  <Text style={[sheetStyles.infoText, { color: colors.text, fontFamily: fonts.sansMedium }]}>
+                    {modal.practiceArea}
+                  </Text>
+                </View>
+                <View style={[sheetStyles.infoDivider, { backgroundColor: colors.cardBorder }]} />
+                <View style={sheetStyles.infoRow}>
+                  <Ionicons name="cash-outline" size={14} color={colors.textMuted} />
+                  <Text style={[sheetStyles.infoText, { color: colors.textMuted, fontFamily: fonts.sans }]}>
+                    Earned
+                  </Text>
+                  <Text style={[sheetStyles.infoFee, { color: colors.accent, fontFamily: fonts.sansBold }]}>
+                    {modal.fee}
+                  </Text>
+                </View>
+              </View>
+              <View style={[sheetStyles.noticeBox, { backgroundColor: colors.accentTint, borderColor: colors.accentBorder }]}>
+                <Ionicons name="notifications-outline" size={15} color={colors.accent} />
+                <Text style={[sheetStyles.noticeText, { color: colors.text, fontFamily: fonts.sans }]}>
+                  Keep the app open — they&apos;ll call you once payment clears.
+                </Text>
+              </View>
+              <Pressable
+                onPress={onDismiss}
+                style={({ pressed }) => [
+                  sheetStyles.btnFilled,
+                  { backgroundColor: colors.success, opacity: pressed ? 0.85 : 1 },
+                ]}
+              >
+                <Ionicons name="checkmark" size={18} color={colors.background} />
+                <Text style={[sheetStyles.btnFilledLabel, { color: colors.background, fontFamily: fonts.sansBold }]}>
+                  Got it
+                </Text>
+              </Pressable>
+            </>
+          ) : (
+            <>
+              <Text style={[sheetStyles.body, { color: colors.textMuted, fontFamily: fonts.sans }]}>
+                {modal.message}
+              </Text>
+              <Pressable
+                onPress={onDismiss}
+                style={({ pressed }) => [
+                  sheetStyles.btnOutlined,
+                  { borderColor: colors.cardBorder, alignSelf: 'stretch', opacity: pressed ? 0.7 : 1 },
+                ]}
+              >
+                <Text style={[sheetStyles.btnOutlinedLabel, { color: colors.text, fontFamily: fonts.sansSemiBold }]}>
+                  OK
+                </Text>
+              </Pressable>
+            </>
+          )}
+        </Animated.View>
+      </View>
+    </Modal>
+  );
+}
+
 export default function ProntoScreen() {
   const { colors } = useTheme();
   const router = useRouter();
@@ -75,6 +271,7 @@ export default function ProntoScreen() {
   const [openRequests, setOpenRequests] = useState<OpenRequest[]>([]);
   const [activeCalls, setActiveCalls] = useState<ProntoActiveCall[]>([]);
   const [completed, setCompleted] = useState<AttorneyRequestItem[]>([]);
+  const [modal, setModal] = useState<ModalState>(null);
   const [joiningCallId, setJoiningCallId] = useState<string | null>(null);
   const [acceptingId, setAcceptingId] = useState<number | null>(null);
   const [openingDocId, setOpeningDocId] = useState<number | null>(null);
@@ -150,35 +347,24 @@ export default function ProntoScreen() {
       const res = await acceptProntoRequest(req.id);
       setAcceptingId(null);
       if (!res.ok) {
-        // 409 = someone else grabbed it first.
-        Alert.alert('Request unavailable', res.message);
+        setModal({ kind: 'unavailable', message: res.message });
         setOpenRequests((prev) => prev.filter((r) => r.id !== req.id));
         return;
       }
       setOpenRequests((prev) => prev.filter((r) => r.id !== req.id));
-      Alert.alert(
-        'Accepted & signed',
-        `You've signed the retainer for ${res.data.client_name}'s ${res.data.practice_area_name} request. They'll pay, then call you — keep the app open.`,
-      );
+      setModal({
+        kind: 'accepted',
+        clientName: res.data.client_name,
+        practiceArea: res.data.practice_area_name,
+        fee: formatMoney(req.fee_amount_cents, req.fee_currency),
+      });
     },
     [acceptingId],
   );
 
-  const handleAccept = useCallback(
-    (req: OpenRequest) => {
-      // Accepting IS signing the retainer (first-come-first-serve). Confirm so
-      // it's an explicit, deliberate signature.
-      Alert.alert(
-        'Accept & sign retainer?',
-        `You'll sign the retainer for ${req.client_name}'s ${req.practice_area_name} request (${formatMoney(req.fee_amount_cents, req.fee_currency)}). First to accept wins, and the client will be charged once you do.`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Accept & Sign', onPress: () => doAccept(req) },
-        ],
-      );
-    },
-    [doAccept],
-  );
+  const handleAccept = useCallback((req: OpenRequest) => {
+    setModal({ kind: 'confirm', req });
+  }, []);
 
   const handleJoinCall = useCallback(
     async (call: ProntoActiveCall) => {
@@ -283,9 +469,20 @@ export default function ProntoScreen() {
               </Text>
             </View>
             <Text style={[styles.hint, { color: colors.textMuted, fontFamily: fonts.sans }]}>
-              Pronto access is granted by GeniusLaw. Please reach out to GeniusLaw to get
-              enrolled — automatic enrollment is coming soon.
+              Get set up for Pronto: verify your identity, add a payment method, and accept the
+              platform terms. A staff member enables your access once you&apos;re done.
             </Text>
+            <Pressable
+              onPress={() => router.push('/pronto-onboarding')}
+              style={({ pressed }) => [
+                styles.primaryBtn,
+                { backgroundColor: colors.accent, opacity: pressed ? 0.85 : 1, marginTop: spacing.md },
+              ]}
+            >
+              <Text style={[styles.primaryBtnLabel, { color: colors.background, fontFamily: fonts.sansBold }]}>
+                Get Pronto access
+              </Text>
+            </Pressable>
           </Animated.View>
         ) : (
           <>
@@ -378,20 +575,31 @@ export default function ProntoScreen() {
                 openRequests.map((req) => (
                   <View
                     key={req.id}
-                    style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
+                    style={[styles.card, { backgroundColor: colors.card, borderColor: colors.accentBorder }]}
                   >
                     <View style={styles.reqHeader}>
-                      <View style={{ flex: 1 }}>
+                      <View style={{ flex: 1, gap: spacing.xs }}>
                         <Text style={[styles.cardTitle, { color: colors.text, fontFamily: fonts.sansSemiBold }]}>
                           {req.practice_area_name}
                         </Text>
-                        <Text style={[styles.hint, { color: colors.textMuted, fontFamily: fonts.sans }]}>
-                          {req.client_name}
-                          {req.attempt_count > 0 ? ' • re-listed' : ''}
+                        <View style={styles.reqClientRow}>
+                          <Ionicons name="person-outline" size={12} color={colors.textMuted} />
+                          <Text style={[styles.hint, { color: colors.textMuted, fontFamily: fonts.sans }]}>
+                            {req.client_name}
+                            {req.attempt_count > 0 ? ' · re-listed' : ''}
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={[styles.feePill, { backgroundColor: colors.accentTint, borderColor: colors.accentBorder }]}>
+                        <Text style={[styles.feePillText, { color: colors.accent, fontFamily: fonts.sansBold }]}>
+                          {formatMoney(req.fee_amount_cents, req.fee_currency)}
                         </Text>
                       </View>
-                      <Text style={[styles.fee, { color: colors.text, fontFamily: fonts.sansBold }]}>
-                        {formatMoney(req.fee_amount_cents, req.fee_currency)}
+                    </View>
+                    <View style={styles.urgencyRow}>
+                      <Ionicons name="flash-outline" size={12} color={colors.textMuted} />
+                      <Text style={[styles.hint, { color: colors.textMuted, fontFamily: fonts.sans }]}>
+                        First to accept wins
                       </Text>
                     </View>
                     <Pressable
@@ -409,9 +617,12 @@ export default function ProntoScreen() {
                       {acceptingId === req.id ? (
                         <ActivityIndicator color={colors.background} />
                       ) : (
-                        <Text style={[styles.primaryBtnLabel, { color: colors.background, fontFamily: fonts.sansBold }]}>
-                          Accept &amp; Sign
-                        </Text>
+                        <>
+                          <Ionicons name="pencil-outline" size={15} color={colors.background} />
+                          <Text style={[styles.primaryBtnLabel, { color: colors.background, fontFamily: fonts.sansBold }]}>
+                            Accept &amp; Sign
+                          </Text>
+                        </>
                       )}
                     </Pressable>
                   </View>
@@ -492,6 +703,13 @@ export default function ProntoScreen() {
         )}
       </ScrollView>
 
+      <ProntoActionSheet
+        modal={modal}
+        colors={colors}
+        onDismiss={() => setModal(null)}
+        onConfirmAccept={(req) => { setModal(null); doAccept(req); }}
+      />
+
       <DocumentViewerModal
         visible={docUrl !== null}
         url={docUrl}
@@ -524,6 +742,15 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   reqHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  reqClientRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  urgencyRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  feePill: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    borderRadius: radius.full,
+    borderWidth: 1,
+  },
+  feePillText: { fontSize: 16 },
   docHint: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   fee: { fontSize: 18 },
   primaryBtn: {
@@ -566,4 +793,80 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
   },
   errorText: { flex: 1, fontSize: 13 },
+});
+
+const sheetStyles = StyleSheet.create({
+  sheet: {
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: 44,
+    gap: spacing.md,
+    alignItems: 'center',
+  },
+  handle: {
+    width: 36,
+    height: 4,
+    borderRadius: radius.full,
+    marginBottom: spacing.xs,
+  },
+  badge: {
+    width: 68,
+    height: 68,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  title: { fontSize: 21, textAlign: 'center' },
+  body: { fontSize: 14, lineHeight: 20, textAlign: 'center', paddingHorizontal: spacing.sm },
+  hint: { fontSize: 13, lineHeight: 18, textAlign: 'center', paddingHorizontal: spacing.sm },
+  infoBox: {
+    alignSelf: 'stretch',
+    borderWidth: 1,
+    borderRadius: radius.md,
+    overflow: 'hidden',
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 12,
+  },
+  infoDivider: { height: StyleSheet.hairlineWidth, marginHorizontal: spacing.md },
+  infoText: { flex: 1, fontSize: 14 },
+  infoFee: { fontSize: 17 },
+  noticeBox: {
+    alignSelf: 'stretch',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    borderWidth: 1,
+    borderRadius: radius.md,
+    padding: spacing.md,
+  },
+  noticeText: { flex: 1, fontSize: 13, lineHeight: 18 },
+  btnRow: { flexDirection: 'row', gap: spacing.sm, alignSelf: 'stretch' },
+  btnFilled: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 15,
+    borderRadius: radius.md,
+    alignSelf: 'stretch',
+  },
+  btnFilledLabel: { fontSize: 15, letterSpacing: 0.4 },
+  btnOutlined: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 15,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.md,
+    borderWidth: 1,
+  },
+  btnOutlinedLabel: { fontSize: 15, letterSpacing: 0.3 },
 });
