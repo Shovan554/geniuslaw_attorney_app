@@ -59,3 +59,24 @@ def create_kyc_session(attorney_row: dict) -> dict[str, Any]:
         "ephemeral_key_secret": ephemeral.secret,
         "publishable_key": get_publishable_key(),
     }
+
+
+def refresh_kyc_status(attorney_row: dict) -> dict[str, Any]:
+    """Retrieve the attorney's Identity session; persist kyc_verified when verified.
+
+    Returns { kyc_verified, status } where status is Stripe's session status
+    (requires_input | processing | verified | canceled), or "none" when no
+    session has been started yet.
+    """
+    _configure()
+    session_id = (attorney_row.get("kyc_session_id") or "").strip()
+    if not session_id:
+        return {"kyc_verified": bool(attorney_row.get("kyc_verified")), "status": "none"}
+
+    session = stripe.identity.VerificationSession.retrieve(session_id)
+    verified = session.status == "verified"
+    if verified and not attorney_row.get("kyc_verified"):
+        get_supabase().table("attorneys").update(
+            {"kyc_verified": True}
+        ).eq("id", attorney_row["id"]).execute()
+    return {"kyc_verified": verified, "status": session.status}
