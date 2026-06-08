@@ -5,6 +5,8 @@ export type OnboardingStatus = {
   kyc_verified: boolean;
   has_card: boolean;
   terms_accepted: boolean;
+  practices_selected: boolean;
+  connect_ready: boolean;
 };
 
 export type KycSessionBundle = {
@@ -14,6 +16,10 @@ export type KycSessionBundle = {
 };
 
 export type KycRefreshResult = { kyc_verified: boolean; status: string };
+
+export type ConnectStartResult = { status: 'ready' | 'pending'; url?: string };
+
+export type ConnectRefreshResult = { status: 'ready' | 'pending' | 'none' };
 
 type Result<T> = { ok: true; data: T } | { ok: false; message: string };
 
@@ -52,4 +58,12 @@ export async function refreshKycStatus(): Promise<Result<KycRefreshResult>> {
 
 export async function acceptProntoTerms(): Promise<Result<{ terms_accepted: boolean }>> {
   return call<{ terms_accepted: boolean }>('POST', '/attorneys/me/pronto-terms/accept');
+}
+
+export async function connectStart(): Promise<Result<ConnectStartResult>> {
+  return call<ConnectStartResult>('POST', '/attorneys/me/connect/start');
+}
+
+export async function connectRefresh(): Promise<Result<ConnectRefreshResult>> {
+  return call<ConnectRefreshResult>('POST', '/attorneys/me/connect/refresh');
 }

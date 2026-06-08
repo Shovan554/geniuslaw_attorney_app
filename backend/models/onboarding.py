@@ -1,3 +1,5 @@
+from typing import Optional
+
 from pydantic import BaseModel
 
 
@@ -6,6 +8,8 @@ class OnboardingStatus(BaseModel):
     kyc_verified: bool
     has_card: bool
     terms_accepted: bool
+    practices_selected: bool
+    connect_ready: bool
 
 
 class KycSessionBundle(BaseModel):
@@ -21,3 +25,12 @@ class KycRefreshResult(BaseModel):
 
 class TermsAcceptResult(BaseModel):
     terms_accepted: bool
+
+
+class ConnectStartResult(BaseModel):
+    status: str
+    url: Optional[str] = None
+
+
+class ConnectRefreshResult(BaseModel):
+    status: str

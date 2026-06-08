@@ -3,6 +3,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -16,7 +17,7 @@ import { AppHeader } from '../../../components/AppHeader';
 import { Card, CardRow } from '../../../components/Card';
 import { fonts, radius, spacing } from '../../../constants/theme';
 import { useTheme } from '../../../contexts/ThemeContext';
-import { AttorneyProfile, getAttorneyMe } from '../../../lib/attorney';
+import { AttorneyProfile, getAttorneyMe, unenrollPronto } from '../../../lib/attorney';
 
 export default function ProfileIndex() {
   const { colors } = useTheme();
@@ -25,6 +26,7 @@ export default function ProfileIndex() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [unenrolling, setUnenrolling] = useState(false);
 
   const load = useCallback(async () => {
     const res = await getAttorneyMe();
@@ -54,6 +56,27 @@ export default function ProfileIndex() {
     await load();
     setRefreshing(false);
   }, [load]);
+
+  const confirmUnenroll = useCallback(() => {
+    Alert.alert(
+      'Unsubscribe from Pronto?',
+      'Your Pronto access turns off and the monthly platform fee stops. Your identity verification and saved card stay on file — re-enrolling later only needs accepting the terms and choosing practice areas again.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Unsubscribe',
+          style: 'destructive',
+          onPress: async () => {
+            setUnenrolling(true);
+            const res = await unenrollPronto();
+            setUnenrolling(false);
+            if (res.ok) setProfile(res.data);
+            else Alert.alert('Could not unsubscribe', res.message);
+          },
+        },
+      ],
+    );
+  }, []);
 
   const initials =
     profile?.full_name
@@ -169,6 +192,20 @@ export default function ProfileIndex() {
               </Card>
             </Animated.View>
 
+            <Animated.View entering={FadeInLeft.duration(360).delay(270)}>
+              <Card style={styles.cardSpacing} padding="md" onPress={() => router.push('/(auth)/profile/practice-areas')}>
+                <View style={styles.actionRow}>
+                  <View style={[styles.iconWrap, { backgroundColor: colors.accentTint, borderColor: colors.accentBorder }]}>
+                    <Ionicons name="briefcase-outline" size={18} color={colors.accent} />
+                  </View>
+                  <Text style={[styles.actionText, { color: colors.text, fontFamily: fonts.sansSemiBold }]}>
+                    Practice Areas
+                  </Text>
+                  <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+                </View>
+              </Card>
+            </Animated.View>
+
             <Animated.View entering={FadeInLeft.duration(360).delay(300)}>
               <Card style={styles.cardSpacing} padding="md" onPress={() => router.push('/(auth)/profile/change-password')}>
                 <View style={styles.actionRow}>
@@ -196,6 +233,26 @@ export default function ProfileIndex() {
                 </View>
               </Card>
             </Animated.View>
+
+            {profile.pronto_enabled ? (
+              <Animated.View entering={FadeInLeft.duration(360).delay(420)}>
+                <Card style={styles.cardSpacing} padding="md" onPress={unenrolling ? undefined : confirmUnenroll}>
+                  <View style={styles.actionRow}>
+                    <View style={[styles.iconWrap, { backgroundColor: 'rgba(224,82,82,0.12)', borderColor: 'rgba(224,82,82,0.35)' }]}>
+                      <Ionicons name="exit-outline" size={18} color={colors.danger} />
+                    </View>
+                    <Text style={[styles.actionText, { color: colors.danger, fontFamily: fonts.sansSemiBold }]}>
+                      Unsubscribe from Pronto
+                    </Text>
+                    {unenrolling ? (
+                      <ActivityIndicator color={colors.danger} />
+                    ) : (
+                      <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+                    )}
+                  </View>
+                </Card>
+              </Animated.View>
+            ) : null}
           </>
         ) : null}
       </ScrollView>

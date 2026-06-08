@@ -31,6 +31,7 @@ def compute_onboarding_status(attorney_row: dict) -> dict[str, bool]:
         "kyc_verified": bool(attorney_row.get("kyc_verified")),
         "has_card": bool((attorney_row.get("card_last4") or "").strip()),
         "terms_accepted": bool(attorney_row.get("pronto_terms_accepted")),
+        "practices_selected": bool((attorney_row.get("practice_areas") or "").strip()),
     }
 
 

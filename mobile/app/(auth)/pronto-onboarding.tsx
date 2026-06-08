@@ -2,9 +2,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useStripe } from '@stripe/stripe-react-native';
 import { useStripeIdentity } from '@stripe/stripe-identity-react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
+import * as Linking from 'expo-linking';
 import { Fragment, useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  AppState,
   Image,
   ScrollView,
   StyleSheet,
@@ -14,46 +16,63 @@ import {
 } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { PracticeAreaPicker } from '../../components/PracticeAreaPicker';
 import { fonts, radius, spacing } from '../../constants/theme';
 import { useTheme } from '../../contexts/ThemeContext';
+import { getAttorneyMe } from '../../lib/attorney';
 import {
   acceptProntoTerms,
+  connectRefresh,
+  connectStart,
   createKycSession,
   getOnboardingStatus,
   refreshKycStatus,
   type OnboardingStatus,
 } from '../../lib/onboarding';
+import {
+  listPracticeAreas,
+  parsePracticeAreas,
+  savePracticeAreas,
+  type PracticeArea,
+} from '../../lib/practiceAreas';
 import { createSetupBundle, getSavedCard } from '../../lib/vault';
 
 const PLATFORM_FEE = '$39.95';
 
 const TERMS_BODY =
-  'GeniusLaw Pronto connects you with clients seeking immediate consultations. ' +
-  'To keep your account active you agree to the Pronto platform fee of ' +
-  `${PLATFORM_FEE}/month, billed to the card you have on file once a staff member ` +
-  'enables your access. You can cancel anytime from your profile. ' +
-  'No charge is made today — accepting only confirms you agree to the fee going forward.';
+  'Pronto!, a service of GeniusLaw, connects you with clients seeking immediate ' +
+  'legal consultation. By agreeing, you authorize a recurring platform fee of ' +
+  `${PLATFORM_FEE}/month charged to the card on file. Your subscription begins ` +
+  'immediately and renews monthly until canceled. You may cancel at any time from ' +
+  'your profile settings. No refunds are issued for partial billing periods.';
 
-type Step = 'loading' | 'kyc' | 'payment' | 'terms' | 'waiting';
+type Step = 'loading' | 'kyc' | 'payment' | 'terms' | 'practices' | 'connect' | 'waiting';
 
 const STEPS: { key: Exclude<Step, 'loading' | 'waiting'>; label: string }[] = [
   { key: 'kyc', label: 'Identity' },
   { key: 'payment', label: 'Payment' },
   { key: 'terms', label: 'Terms' },
+  { key: 'practices', label: 'Practice' },
+  { key: 'connect', label: 'Payouts' },
 ];
 
 function stepFromStatus(s: OnboardingStatus): Step {
   if (!s.kyc_verified) return 'kyc';
   if (!s.has_card) return 'payment';
   if (!s.terms_accepted) return 'terms';
-  return 'waiting';
+  if (!s.practices_selected) return 'practices';
+  // Payouts is the last step. It renders either "set up" or "already set for your
+  // firm — you're good" based on the firm's Connect readiness.
+  return 'connect';
 }
 
 function currentIndex(step: Step): number {
   if (step === 'kyc') return 0;
   if (step === 'payment') return 1;
   if (step === 'terms') return 2;
-  return 3; // waiting → all complete
+  if (step === 'practices') return 3;
+  if (step === 'connect') return 4;
+  return 5; // waiting → all complete
 }
 
 export default function ProntoOnboardingScreen() {
@@ -65,6 +84,12 @@ export default function ProntoOnboardingScreen() {
   const [working, setWorking] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
+  // --- Practice areas step ---
+  const [practiceAreas, setPracticeAreas] = useState<PracticeArea[]>([]);
+  const [selectedPractices, setSelectedPractices] = useState<Set<string>>(new Set());
+  const [practicesLoading, setPracticesLoading] = useState(false);
+  const [connectStatus, setConnectStatus] = useState<'unknown' | 'ready' | 'pending'>('unknown');
+
   const reload = useCallback(async () => {
     const res = await getOnboardingStatus();
     if (!res.ok) {
@@ -75,7 +100,17 @@ export default function ProntoOnboardingScreen() {
       router.replace('/pronto');
       return;
     }
-    setStep(stepFromStatus(res.data));
+    const next = stepFromStatus(res.data);
+    setStep(next);
+    if (next === 'connect') {
+      if (res.data.connect_ready) {
+        setConnectStatus('ready');
+      } else {
+        const r = await connectRefresh();
+        if (r.ok) setConnectStatus(r.data.status === 'ready' ? 'ready' : 'pending');
+        else setMessage(r.message);
+      }
+    }
   }, [router]);
 
   useFocusEffect(
@@ -83,6 +118,18 @@ export default function ProntoOnboardingScreen() {
       reload();
     }, [reload]),
   );
+
+  // The Connect (payouts) step sends the attorney to a Stripe-hosted page in an
+  // external browser. useFocusEffect does NOT re-fire on app foreground (the
+  // screen never lost navigation focus), so re-check status whenever the app
+  // becomes active — that's when they return from Stripe, and it promotes the
+  // firm to payout-ready.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') reload();
+    });
+    return () => sub.remove();
+  }, [reload]);
 
   // --- KYC step (Stripe Identity native sheet) ---
   const fetchIdentityOptions = useCallback(async () => {
@@ -166,6 +213,73 @@ export default function ProntoOnboardingScreen() {
     await reload();
   }, [reload]);
 
+  // --- Practice areas step ---
+  // Load the catalog + the attorney's existing selections when this step opens.
+  useEffect(() => {
+    if (step !== 'practices') return;
+    let cancelled = false;
+    setPracticesLoading(true);
+    Promise.all([listPracticeAreas(), getAttorneyMe()])
+      .then(([catalog, me]) => {
+        if (cancelled) return;
+        if (catalog.ok) setPracticeAreas(catalog.data);
+        else setMessage(catalog.message);
+        if (me.ok) setSelectedPractices(new Set(parsePracticeAreas(me.data.practice_areas)));
+      })
+      .finally(() => {
+        if (!cancelled) setPracticesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [step]);
+
+  const togglePractice = useCallback((name: string) => {
+    setSelectedPractices((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  }, []);
+
+  const savePractices = useCallback(async () => {
+    if (selectedPractices.size === 0) return;
+    setWorking(true);
+    setMessage(null);
+    const res = await savePracticeAreas([...selectedPractices]);
+    setWorking(false);
+    if (!res.ok) {
+      setMessage(res.message);
+      return;
+    }
+    // Practices saved → advance to the payouts step (reload computes 'connect'
+    // and checks the firm's Connect readiness).
+    await reload();
+  }, [selectedPractices, reload]);
+
+  const setupPayouts = useCallback(async () => {
+    setWorking(true);
+    setMessage(null);
+    const res = await connectStart();
+    setWorking(false);
+    if (!res.ok) {
+      setMessage(res.message);
+      return;
+    }
+    if (res.data.status === 'ready') {
+      setConnectStatus('ready');
+      return;
+    }
+    if (res.data.url) {
+      // Opens Stripe-hosted onboarding. On return to the app, useFocusEffect →
+      // reload() → connectRefresh() promotes the firm once payouts are enabled.
+      await Linking.openURL(res.data.url);
+    } else {
+      setMessage('Could not open Stripe payouts. Please try again.');
+    }
+  }, []);
+
   const activeIndex = currentIndex(step);
   const successTint = 'rgba(76,175,125,0.12)';
   const successBorder = 'rgba(76,175,125,0.40)';
@@ -188,23 +302,55 @@ export default function ProntoOnboardingScreen() {
             title: 'Add a payment method',
             body: "You're verified. Add a card we'll keep on file for the Pronto platform fee.",
             points: [
-              `${PLATFORM_FEE} / month platform fee`,
-              'No charge today — card saved on file',
-              'Stored securely by Stripe',
+              `${PLATFORM_FEE}/month platform fee, billed immediately`,
+              'Cancel anytime from your profile',
             ],
             cta: 'Add card',
             onPress: addCard,
             busy: false,
           }
-        : {
-            icon: 'document-text-outline' as const,
-            title: 'Accept the platform terms',
-            body: TERMS_BODY,
-            points: [],
-            cta: `I agree to ${PLATFORM_FEE}/month`,
-            onPress: agree,
-            busy: false,
-          };
+        : step === 'terms'
+          ? {
+              icon: 'document-text-outline' as const,
+              title: 'Accept the platform terms',
+              body: TERMS_BODY,
+              points: [],
+              cta: `I agree to ${PLATFORM_FEE}/month`,
+              onPress: agree,
+              busy: false,
+            }
+          : step === 'practices'
+            ? {
+                icon: 'briefcase-outline' as const,
+                title: 'Choose your practice areas',
+                body: 'Select the practice areas you handle. Clients will be matched to you based on these.',
+                points: [],
+                cta: 'Save & continue',
+                onPress: savePractices,
+                busy: false,
+              }
+            : connectStatus === 'ready'
+              ? {
+                  icon: 'cash-outline' as const,
+                  title: 'Payouts ready',
+                  body: "Stripe payouts are already set up for your firm — you're good to go.",
+                  points: [],
+                  cta: 'Continue',
+                  onPress: () => router.replace('/pronto'),
+                  busy: false,
+                }
+              : {
+                  icon: 'cash-outline' as const,
+                  title: 'Set up firm payouts',
+                  body: "Connect your firm's bank account through Stripe so client payments can reach you. Stripe securely collects your bank and verification details — it only takes a couple of minutes.",
+                  points: [],
+                  cta: 'Set up payouts',
+                  onPress: setupPayouts,
+                  busy: false,
+                };
+
+  const ctaDisabled =
+    working || hero.busy || (step === 'practices' && selectedPractices.size === 0);
 
   return (
     <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: colors.background }]}>
@@ -343,11 +489,34 @@ export default function ProntoOnboardingScreen() {
                       {PLATFORM_FEE} / month
                     </Text>
                   </View>
-                  <View style={[styles.termsBox, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-                    <Text style={[styles.termsText, { color: colors.textMuted, fontFamily: fonts.sans }]}>
+                  <View style={[styles.termsBox, { backgroundColor: colors.card, borderColor: colors.cardBorder, borderLeftColor: colors.accent }]}>
+                    <View style={styles.termsHeader}>
+                      <Ionicons name="document-text-outline" size={16} color={colors.accent} />
+                      <Text style={[styles.termsHeaderText, { color: colors.accent, fontFamily: fonts.sansBold }]}>
+                        Subscription terms
+                      </Text>
+                    </View>
+                    <Text style={[styles.termsText, { color: colors.text, fontFamily: fonts.sans }]}>
                       {hero.body}
                     </Text>
                   </View>
+                </>
+              ) : step === 'practices' ? (
+                <>
+                  <Text style={[styles.heroBody, { color: colors.textMuted, fontFamily: fonts.sans }]}>
+                    {hero.body}
+                  </Text>
+                  {practicesLoading ? (
+                    <ActivityIndicator color={colors.textMuted} style={{ marginTop: spacing.xl }} />
+                  ) : (
+                    <View style={styles.practicesWrap}>
+                      <PracticeAreaPicker
+                        areas={practiceAreas}
+                        selected={selectedPractices}
+                        onToggle={togglePractice}
+                      />
+                    </View>
+                  )}
                 </>
               ) : (
                 <Text style={[styles.heroBody, { color: colors.textMuted, fontFamily: fonts.sans }]}>
@@ -378,9 +547,9 @@ export default function ProntoOnboardingScreen() {
               </Text>
             ) : null}
             <TouchableOpacity
-              disabled={working || hero.busy}
+              disabled={ctaDisabled}
               onPress={hero.onPress}
-              style={[styles.cta, { backgroundColor: colors.accent, opacity: working || hero.busy ? 0.6 : 1 }]}
+              style={[styles.cta, { backgroundColor: colors.accent, opacity: ctaDisabled ? 0.6 : 1 }]}
             >
               {working ? (
                 <ActivityIndicator color={colors.background} />
@@ -459,12 +628,25 @@ const styles = StyleSheet.create({
   },
   feePillText: { fontSize: 14, letterSpacing: 0.3 },
   termsBox: {
-    marginTop: spacing.md,
+    alignSelf: 'stretch',
+    marginTop: spacing.lg,
     borderWidth: 1,
+    borderLeftWidth: 3,
     borderRadius: radius.md,
-    padding: spacing.md,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.lg,
   },
-  termsText: { fontSize: 13, lineHeight: 20 },
+  termsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  termsHeaderText: { fontSize: 12, letterSpacing: 0.6, textTransform: 'uppercase' },
+  termsText: { fontSize: 15, lineHeight: 23, textAlign: 'left' },
+
+  // Practice areas
+  practicesWrap: { alignSelf: 'stretch', marginTop: spacing.xl },
 
   // Points
   points: { alignSelf: 'stretch', marginTop: spacing.xl, gap: spacing.md },

@@ -14,6 +14,8 @@ export type AttorneyProfile = {
   title: string | null;
   bio: string | null;
   status: string | null;
+  practice_areas: string | null;
+  pronto_enabled: boolean | null;
   firm_name: string | null;
 };
 
@@ -29,7 +31,7 @@ export type AttorneyProfileUpdate = Partial<{
 type Result<T> = { ok: true; data: T } | { ok: false; message: string };
 
 async function request<T>(
-  method: 'GET' | 'PATCH',
+  method: 'GET' | 'PATCH' | 'POST',
   path: string,
   body?: unknown,
 ): Promise<Result<T>> {
@@ -59,6 +61,12 @@ async function request<T>(
 
 export async function getAttorneyMe(): Promise<Result<AttorneyProfile>> {
   return request<AttorneyProfile>('GET', '/attorneys/me');
+}
+
+/** Leave Pronto: clears enrollment + terms acceptance + availability. KYC and the
+ * saved card are kept, so re-enrolling only needs terms + practice areas again. */
+export async function unenrollPronto(): Promise<Result<AttorneyProfile>> {
+  return request<AttorneyProfile>('POST', '/attorneys/me/pronto/unenroll');
 }
 
 export async function updateAttorneyMe(

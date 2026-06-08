@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -19,6 +19,9 @@ import { AppHeader } from '../../components/AppHeader';
 import { DocumentViewerModal } from '../../components/DocumentViewerModal';
 import { AppColors, fonts, radius, spacing } from '../../constants/theme';
 import { useTheme } from '../../contexts/ThemeContext';
+import { getAttorneyMe } from '../../lib/attorney';
+import { getOnboardingStatus, type OnboardingStatus } from '../../lib/onboarding';
+import { parsePracticeAreas } from '../../lib/practiceAreas';
 import {
   Availability,
   acceptProntoCall,
@@ -268,6 +271,8 @@ export default function ProntoScreen() {
   const { colors } = useTheme();
   const router = useRouter();
   const [availability, setAvailability] = useState<Availability | null>(null);
+  const [onboarding, setOnboarding] = useState<OnboardingStatus | null>(null);
+  const [practiceAreas, setPracticeAreas] = useState<string[] | null>(null);
   const [openRequests, setOpenRequests] = useState<OpenRequest[]>([]);
   const [activeCalls, setActiveCalls] = useState<ProntoActiveCall[]>([]);
   const [completed, setCompleted] = useState<AttorneyRequestItem[]>([]);
@@ -285,14 +290,18 @@ export default function ProntoScreen() {
   const load = useCallback(async (isRefresh = false) => {
     if (!isRefresh) setLoading(true);
     setError(null);
-    const [availRes, openRes, activeRes, mineRes] = await Promise.all([
+    const [availRes, openRes, activeRes, mineRes, onboardingRes, meRes] = await Promise.all([
       getProntoAvailability(),
       listOpenRequests(),
       listProntoActiveCalls(),
       listMyProntoRequests(),
+      getOnboardingStatus(),
+      getAttorneyMe(),
     ]);
     if (availRes.ok) setAvailability(availRes.data);
     else setError(availRes.message);
+    if (onboardingRes.ok) setOnboarding(onboardingRes.data);
+    if (meRes.ok) setPracticeAreas(parsePracticeAreas(meRes.data.practice_areas));
     if (openRes.ok) setOpenRequests(openRes.data);
     if (activeRes.ok) setActiveCalls(activeRes.data.calls);
     if (mineRes.ok) {
@@ -430,6 +439,17 @@ export default function ProntoScreen() {
   );
 
   const enrolled = availability?.pronto_enabled ?? false;
+  const onboardingComplete =
+    !!onboarding && onboarding.kyc_verified && onboarding.has_card && onboarding.terms_accepted;
+
+  // Only surface requests in the attorney's selected practice areas. While the
+  // profile is still loading (practiceAreas === null) we show everything to
+  // avoid hiding the queue on first paint; once loaded we match by area name.
+  const visibleRequests = useMemo(() => {
+    if (!practiceAreas) return openRequests;
+    const selected = new Set(practiceAreas.map((p) => p.trim().toLowerCase()));
+    return openRequests.filter((r) => selected.has(r.practice_area_name.trim().toLowerCase()));
+  }, [openRequests, practiceAreas]);
   const available = availability?.pronto_available ?? false;
   const statusLabel = available
     ? formatSince(availability?.pronto_available_since ?? null) || 'You are on duty'
@@ -457,6 +477,34 @@ export default function ProntoScreen() {
               <Text style={{ color: colors.accent, fontFamily: fonts.sansSemiBold }}>Retry</Text>
             </Pressable>
           </View>
+        ) : !enrolled && onboardingComplete ? (
+          <Animated.View
+            entering={FadeInUp.delay(60).duration(500).easing(Easing.out(Easing.cubic))}
+            style={[styles.card, { backgroundColor: colors.card, borderColor: colors.accentBorder }]}
+          >
+            <View style={styles.rowHeader}>
+              <Ionicons name="checkmark-circle" size={20} color={colors.success} />
+              <Text style={[styles.cardTitle, { color: colors.text, fontFamily: fonts.sansSemiBold }]}>
+                You&apos;re all set
+              </Text>
+            </View>
+            <Text style={[styles.hint, { color: colors.textMuted, fontFamily: fonts.sans }]}>
+              Please wait for a staff member to enable Pronto access for you. You&apos;ll be able to
+              go on duty here as soon as your account is enabled.
+            </Text>
+            <Pressable
+              onPress={() => router.push('/(auth)/profile/practice-areas')}
+              style={({ pressed }) => [
+                styles.secondaryBtn,
+                { borderColor: colors.cardBorder, opacity: pressed ? 0.7 : 1, marginTop: spacing.md },
+              ]}
+            >
+              <Ionicons name="briefcase-outline" size={16} color={colors.text} />
+              <Text style={[styles.secondaryBtnLabel, { color: colors.text, fontFamily: fonts.sansSemiBold }]}>
+                Set practice areas
+              </Text>
+            </Pressable>
+          </Animated.View>
         ) : !enrolled ? (
           <Animated.View
             entering={FadeInUp.delay(60).duration(500).easing(Easing.out(Easing.cubic))}
@@ -561,18 +609,20 @@ export default function ProntoScreen() {
             {/* Open requests — first-come accept */}
             <Animated.View entering={FadeInUp.delay(110).duration(500)} style={styles.section}>
               <Text style={[styles.sectionLabel, { color: colors.textMuted, fontFamily: fonts.sansBold }]}>
-                Open requests {openRequests.length > 0 ? `(${openRequests.length})` : ''}
+                Open requests {visibleRequests.length > 0 ? `(${visibleRequests.length})` : ''}
               </Text>
-              {openRequests.length === 0 ? (
+              {visibleRequests.length === 0 ? (
                 <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
                   <Text style={[styles.hint, { color: colors.textMuted, fontFamily: fonts.sans }]}>
-                    {available
-                      ? 'No open requests right now. New ones show up here the moment a client pays.'
-                      : 'Go on duty to see incoming requests.'}
+                    {!available
+                      ? 'Go on duty to see incoming requests.'
+                      : practiceAreas && practiceAreas.length === 0
+                        ? 'Add practice areas to your profile to start receiving matching requests.'
+                        : 'No open requests in your practice areas right now. New ones show up here the moment a matching client pays.'}
                   </Text>
                 </View>
               ) : (
-                openRequests.map((req) => (
+                visibleRequests.map((req) => (
                   <View
                     key={req.id}
                     style={[styles.card, { backgroundColor: colors.card, borderColor: colors.accentBorder }]}
@@ -763,6 +813,17 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   primaryBtnLabel: { fontSize: 15, letterSpacing: 0.4 },
+  secondaryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 13,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    marginTop: spacing.xs,
+  },
+  secondaryBtnLabel: { fontSize: 15, letterSpacing: 0.3 },
   linkCard: {
     flexDirection: 'row',
     alignItems: 'center',

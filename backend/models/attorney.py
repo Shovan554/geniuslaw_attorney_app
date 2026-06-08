@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import List, Optional
 
 from pydantic import BaseModel, EmailStr, Field
 
@@ -14,6 +14,8 @@ class AttorneyProfile(BaseModel):
     title: Optional[str] = None
     bio: Optional[str] = None
     status: Optional[str] = None
+    practice_areas: Optional[str] = None
+    pronto_enabled: Optional[bool] = None
     firm_name: Optional[str] = None
 
 
@@ -24,3 +26,17 @@ class AttorneyProfileUpdate(BaseModel):
     address: Optional[str] = Field(default=None, max_length=500)
     bar_number: Optional[str] = Field(default=None, max_length=100)
     bio: Optional[str] = Field(default=None, max_length=5000)
+
+
+class PracticeArea(BaseModel):
+    id: int
+    name: str
+    pre_retainer_required: bool
+
+
+class PracticeAreasUpdate(BaseModel):
+    names: List[str] = Field(default_factory=list)
+
+
+class PracticeAreasResult(BaseModel):
+    practice_areas: str
