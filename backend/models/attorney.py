@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from pydantic import BaseModel, EmailStr, Field
 
@@ -15,6 +15,7 @@ class AttorneyProfile(BaseModel):
     bio: Optional[str] = None
     status: Optional[str] = None
     practice_areas: Optional[str] = None
+    states: Optional[Any] = None
     pronto_enabled: Optional[bool] = None
     firm_name: Optional[str] = None
 
@@ -40,3 +41,11 @@ class PracticeAreasUpdate(BaseModel):
 
 class PracticeAreasResult(BaseModel):
     practice_areas: str
+
+
+class StatesUpdate(BaseModel):
+    states: List[str] = Field(default_factory=list)
+
+
+class StatesResult(BaseModel):
+    states: dict

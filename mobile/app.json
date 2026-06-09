@@ -3,7 +3,7 @@
     "name": "GeniusLaw Attorney",
     "slug": "geniuslaw-attorney",
     "owner": "geniuslaw",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "scheme": "geniuslawattorney",
     "orientation": "portrait",
     "icon": "./assets/icon.png",

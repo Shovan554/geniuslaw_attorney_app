@@ -1,3 +1,5 @@
+import json
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import HTMLResponse
 
@@ -8,6 +10,8 @@ from models.attorney import (
     PracticeArea,
     PracticeAreasResult,
     PracticeAreasUpdate,
+    StatesResult,
+    StatesUpdate,
 )
 from models.vault import VaultCard, VaultSetupBundle
 from models.onboarding import (
@@ -25,7 +29,33 @@ from services.supabase_client import get_supabase
 
 router = APIRouter(prefix="/attorneys", tags=["attorneys"])
 
-ATTORNEY_SELECT = "id,firm_id,full_name,email,phone,address,bar_number,title,bio,status,practice_areas,customer_id,card_brand,card_last4,pronto_enabled,kyc_verified,kyc_session_id,pronto_terms_accepted"
+ATTORNEY_SELECT = "id,firm_id,full_name,email,phone,address,bar_number,title,bio,status,practice_areas,states,customer_id,card_brand,card_last4,pronto_enabled,kyc_verified,kyc_session_id,pronto_terms_accepted"
+
+# Valid USPS state codes (50 states + DC) used to validate the licensed-states
+# multi-select before persisting.
+US_STATE_CODES = {
+    "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA",
+    "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD",
+    "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ",
+    "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC",
+    "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY", "DC",
+}
+
+
+def _parse_states(raw) -> dict:
+    """Parse the stored `states` value into a dict of code -> value.
+
+    The column is text holding serialized JSON, but tolerate an already-parsed
+    dict (jsonb) too. Returns {} on anything unparseable."""
+    if isinstance(raw, dict):
+        return raw
+    if isinstance(raw, str) and raw.strip():
+        try:
+            parsed = json.loads(raw)
+            return parsed if isinstance(parsed, dict) else {}
+        except (ValueError, TypeError):
+            return {}
+    return {}
 
 
 def _fetch_user_email(user_id: int) -> str | None:
@@ -291,3 +321,34 @@ def update_practice_areas(
         {"practice_areas": practice_areas}
     ).eq("id", attorney["id"]).execute()
     return PracticeAreasResult(practice_areas=practice_areas)
+
+
+@router.patch("/me/states", response_model=StatesResult)
+def update_states(
+    payload: StatesUpdate,
+    token: dict = Depends(require_attorney_role),
+) -> StatesResult:
+    """Replace the attorney's licensed states. Accepts a list of USPS codes and
+    stores them as a JSON object `{"AZ": "", "CA": ""}` (code -> per-state value).
+    Any existing per-state value is preserved for codes that stay selected;
+    newly added codes default to an empty string."""
+    attorney = _current_attorney_row(token)
+    sb = get_supabase()
+
+    existing = _parse_states(attorney.get("states"))
+
+    chosen: dict = {}
+    for raw in payload.states:
+        code = (raw or "").strip().upper()
+        if code in US_STATE_CODES and code not in chosen:
+            prior = existing.get(code)
+            chosen[code] = prior if isinstance(prior, str) else ""
+
+    # Store as a native JSON object (jsonb) -> {"DC": "", "MD": ""}, not a
+    # serialized JSON string. Passing the dict directly lets PostgREST persist
+    # it as an object rather than a double-encoded string.
+    states = {code: chosen[code] for code in sorted(chosen)}
+    sb.table("attorneys").update(
+        {"states": states}
+    ).eq("id", attorney["id"]).execute()
+    return StatesResult(states=states)
