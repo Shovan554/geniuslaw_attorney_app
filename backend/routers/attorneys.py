@@ -208,7 +208,7 @@ def connect_return() -> HTMLResponse:
     # onboarding screen, which polls /connect/refresh and promotes the firm to
     # payout-ready. Auto-attempt on load, plus a tap fallback (iOS often blocks
     # an automatic custom-scheme redirect but allows it on a user gesture).
-    app_link = "geniuslawattorney://"
+    app_link = "geniuslawattorney://pronto-onboarding"
     return HTMLResponse(
         f"""<!doctype html>
 <html lang="en">
