@@ -88,25 +88,26 @@ async function request<T>(
   }
 }
 
-/** Replace the attorney's licensed states with `codes`. Returns the saved JSON
- * object the server persisted (e.g. `{"AZ":"","CA":""}`). */
+/** Replace the attorney's licensed states with `states`, a map of USPS code ->
+ * bar number (empty string is allowed). Returns the saved JSON object the
+ * server persisted (e.g. `{"CA":"4321","NJ":""}`). */
 export async function saveStates(
-  codes: string[],
+  states: Record<string, string>,
 ): Promise<Result<{ states: Record<string, string> }>> {
   return request<{ states: Record<string, string> }>('PATCH', '/attorneys/me/states', {
-    states: codes,
+    states,
   });
 }
 
-/** Parse the stored `states` value into a Set of selected USPS codes.
+/** Parse the stored `states` value into a map of USPS code -> bar number.
  *
  * Tolerant of every shape the column has held: a JSON string or a parsed
- * object, with values that are empty strings (`{"AZ":""}`), bar numbers
- * (`{"NJ":"12345"}`), or booleans (`{"CA":true}`). A key counts as selected
- * unless its value is explicitly `false`. */
-export function parseStates(
+ * object, with values that are bar numbers (`{"NJ":"12345"}`), empty strings
+ * (`{"AZ":""}`), or booleans (`{"CA":true}`). Non-string values normalize to an
+ * empty bar number; a value of `false` drops the key entirely (deselected). */
+export function parseStatesMap(
   value: string | Record<string, unknown> | null | undefined,
-): Set<string> {
+): Record<string, string> {
   let obj: Record<string, unknown> = {};
   if (typeof value === 'string') {
     try {
@@ -119,10 +120,10 @@ export function parseStates(
     obj = value;
   }
 
-  const set = new Set<string>();
+  const map: Record<string, string> = {};
   for (const [key, v] of Object.entries(obj)) {
     if (v === false) continue;
-    set.add(key.trim().toUpperCase());
+    map[key.trim().toUpperCase()] = typeof v === 'string' ? v : '';
   }
-  return set;
+  return map;
 }

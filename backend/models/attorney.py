@@ -1,4 +1,4 @@
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from pydantic import BaseModel, EmailStr, Field
 
@@ -44,7 +44,10 @@ class PracticeAreasResult(BaseModel):
 
 
 class StatesUpdate(BaseModel):
-    states: List[str] = Field(default_factory=list)
+    # Map of USPS code -> bar number, e.g. {"CA": "4321", "NJ": ""}.
+    # A bare list of codes is still accepted (older app builds) and treated as
+    # codes with empty bar numbers.
+    states: Union[Dict[str, str], List[str]] = Field(default_factory=dict)
 
 
 class StatesResult(BaseModel):

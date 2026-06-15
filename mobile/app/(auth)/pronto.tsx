@@ -480,30 +480,23 @@ export default function ProntoScreen() {
         ) : !enrolled && onboardingComplete ? (
           <Animated.View
             entering={FadeInUp.delay(60).duration(500).easing(Easing.out(Easing.cubic))}
-            style={[styles.card, { backgroundColor: colors.card, borderColor: colors.accentBorder }]}
+            style={[styles.allSetCard, { backgroundColor: colors.card, borderColor: colors.accentBorder }]}
           >
-            <View style={styles.rowHeader}>
-              <Ionicons name="checkmark-circle" size={20} color={colors.success} />
-              <Text style={[styles.cardTitle, { color: colors.text, fontFamily: fonts.sansSemiBold }]}>
-                You&apos;re all set
-              </Text>
+            <View
+              style={[
+                styles.allSetBadge,
+                { backgroundColor: 'rgba(76,175,125,0.12)', borderColor: 'rgba(76,175,125,0.40)' },
+              ]}
+            >
+              <Ionicons name="checkmark-circle" size={46} color={colors.success} />
             </View>
-            <Text style={[styles.hint, { color: colors.textMuted, fontFamily: fonts.sans }]}>
+            <Text style={[styles.allSetTitle, { color: colors.text, fontFamily: fonts.heading }]}>
+              You&apos;re all set
+            </Text>
+            <Text style={[styles.allSetHint, { color: colors.textMuted, fontFamily: fonts.sans }]}>
               Please wait for a staff member to enable Pronto access for you. You&apos;ll be able to
               go on duty here as soon as your account is enabled.
             </Text>
-            <Pressable
-              onPress={() => router.push('/(auth)/profile/practice-areas')}
-              style={({ pressed }) => [
-                styles.secondaryBtn,
-                { borderColor: colors.cardBorder, opacity: pressed ? 0.7 : 1, marginTop: spacing.md },
-              ]}
-            >
-              <Ionicons name="briefcase-outline" size={16} color={colors.text} />
-              <Text style={[styles.secondaryBtnLabel, { color: colors.text, fontFamily: fonts.sansSemiBold }]}>
-                Set practice areas
-              </Text>
-            </Pressable>
           </Animated.View>
         ) : !enrolled ? (
           <Animated.View
@@ -778,6 +771,31 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     padding: spacing.lg,
     gap: spacing.sm,
+  },
+  allSetCard: {
+    borderWidth: 1,
+    borderRadius: radius.lg,
+    paddingVertical: spacing.xl * 1.6,
+    paddingHorizontal: spacing.lg,
+    marginTop: spacing.xl,
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  allSetBadge: {
+    width: 84,
+    height: 84,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.xs,
+  },
+  allSetTitle: { fontSize: 24, textAlign: 'center' },
+  allSetHint: {
+    fontSize: 14,
+    lineHeight: 21,
+    textAlign: 'center',
+    paddingHorizontal: spacing.sm,
   },
   rowHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   dot: { width: 10, height: 10, borderRadius: radius.full },

@@ -15,9 +15,9 @@ export type AttorneyProfile = {
   bio: string | null;
   status: string | null;
   practice_areas: string | null;
-  /** Licensed states. Stored server-side as a JSON object of code -> value
-   * (e.g. `{"AZ":"","CA":""}`); may arrive as that JSON string or a parsed
-   * object. Use `parseStates()` from `lib/states` to read it. */
+  /** Licensed states. Stored server-side as a JSON object of code -> bar number
+   * (e.g. `{"CA":"4321","NJ":""}`); may arrive as that JSON string or a parsed
+   * object. Use `parseStatesMap()` from `lib/states` to read it. */
   states: string | Record<string, string | boolean> | null;
   pronto_enabled: boolean | null;
   firm_name: string | null;

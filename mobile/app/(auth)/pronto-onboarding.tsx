@@ -323,7 +323,7 @@ export default function ProntoOnboardingScreen() {
             ? {
                 icon: 'briefcase-outline' as const,
                 title: 'Choose your practice areas',
-                body: 'Select the practice areas you handle. Clients will be matched to you based on these.',
+                body: 'Please select your practice areas.',
                 points: [],
                 cta: 'Save & continue',
                 onPress: savePractices,
@@ -514,6 +514,7 @@ export default function ProntoOnboardingScreen() {
                         areas={practiceAreas}
                         selected={selectedPractices}
                         onToggle={togglePractice}
+                        preRetainerOnly
                       />
                     </View>
                   )}

@@ -328,25 +328,35 @@ def update_states(
     payload: StatesUpdate,
     token: dict = Depends(require_attorney_role),
 ) -> StatesResult:
-    """Replace the attorney's licensed states. Accepts a list of USPS codes and
-    stores them as a JSON object `{"AZ": "", "CA": ""}` (code -> per-state value).
-    Any existing per-state value is preserved for codes that stay selected;
-    newly added codes default to an empty string."""
+    """Replace the attorney's licensed states. Accepts a map of USPS code -> bar
+    number, e.g. `{"CA": "4321", "NJ": ""}`, and stores it as a JSON object
+    (code -> bar number). A bare list of codes is still accepted from older app
+    builds; those carry no bar numbers, so any existing bar number is preserved
+    and missing ones default to an empty string."""
     attorney = _current_attorney_row(token)
     sb = get_supabase()
 
     existing = _parse_states(attorney.get("states"))
 
+    # Normalize into {code: bar_or_None}. A list payload carries no bar numbers
+    # (value None -> preserve the existing one); a dict is authoritative.
+    raw = payload.states
+    incoming = {code: None for code in raw} if isinstance(raw, list) else dict(raw)
+
     chosen: dict = {}
-    for raw in payload.states:
-        code = (raw or "").strip().upper()
-        if code in US_STATE_CODES and code not in chosen:
+    for code_raw, bar_raw in incoming.items():
+        code = (code_raw or "").strip().upper()
+        if code not in US_STATE_CODES or code in chosen:
+            continue
+        if bar_raw is None:
             prior = existing.get(code)
             chosen[code] = prior if isinstance(prior, str) else ""
+        else:
+            chosen[code] = str(bar_raw).strip()
 
-    # Store as a native JSON object (jsonb) -> {"DC": "", "MD": ""}, not a
-    # serialized JSON string. Passing the dict directly lets PostgREST persist
-    # it as an object rather than a double-encoded string.
+    # Store as a native JSON object (jsonb) -> {"CA": "4321"}, not a serialized
+    # JSON string. Passing the dict directly lets PostgREST persist it as an
+    # object rather than a double-encoded string.
     states = {code: chosen[code] for code in sorted(chosen)}
     sb.table("attorneys").update(
         {"states": states}

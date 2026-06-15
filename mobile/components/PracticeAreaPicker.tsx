@@ -10,24 +10,26 @@ type Props = {
   /** Currently-selected practice-area names. */
   selected: Set<string>;
   onToggle: (name: string) => void;
+  /** When true, show ONLY pre-retainer-required areas as a single flat list with no section headers. */
+  preRetainerOnly?: boolean;
 };
 
 const SECTIONS = [
   {
-    preRetainer: false,
-    title: 'Practice areas',
-    caption: 'Areas you can take on directly.',
+    preRetainer: true,
+    title: 'Pronto practice areas',
+    caption: 'These require a signed retainer before work begins.',
   },
   {
-    preRetainer: true,
-    title: 'Pre-retainer required',
-    caption: 'These require a signed retainer before work begins.',
+    preRetainer: false,
+    title: 'General practice areas',
+    caption: 'Areas you can take on directly.',
   },
 ] as const;
 
 /** Two grouped sections of checkbox rows for selecting practice areas.
  * Controlled: the parent owns the `selected` set and handles `onToggle`. */
-export function PracticeAreaPicker({ areas, selected, onToggle }: Props) {
+export function PracticeAreaPicker({ areas, selected, onToggle, preRetainerOnly = false }: Props) {
   const { colors } = useTheme();
 
   const grouped = useMemo(() => {
@@ -38,19 +40,29 @@ export function PracticeAreaPicker({ areas, selected, onToggle }: Props) {
     };
   }, [areas]);
 
+  // Pronto onboarding shows only pre-retainer-required areas in a single,
+  // header-less list; everywhere else keeps the two labelled sections.
+  const sections = preRetainerOnly
+    ? [{ preRetainer: true, title: '', caption: '' } as const]
+    : SECTIONS;
+
   return (
     <View style={styles.wrap}>
-      {SECTIONS.map((section) => {
+      {sections.map((section) => {
         const items = grouped[String(section.preRetainer) as 'true' | 'false'];
         if (items.length === 0) return null;
         return (
-          <View key={section.title} style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.text, fontFamily: fonts.sansBold }]}>
-              {section.title}
-            </Text>
-            <Text style={[styles.sectionCaption, { color: colors.textMuted, fontFamily: fonts.sans }]}>
-              {section.caption}
-            </Text>
+          <View key={section.title || 'pre-retainer'} style={styles.section}>
+            {section.title ? (
+              <>
+                <Text style={[styles.sectionTitle, { color: colors.text, fontFamily: fonts.sansBold }]}>
+                  {section.title}
+                </Text>
+                <Text style={[styles.sectionCaption, { color: colors.textMuted, fontFamily: fonts.sans }]}>
+                  {section.caption}
+                </Text>
+              </>
+            ) : null}
 
             <View style={[styles.group, { borderColor: colors.cardBorder, backgroundColor: colors.card }]}>
               {items.map((area, idx) => {
