@@ -9,6 +9,14 @@ export type Availability = {
   pronto_enabled: boolean;
   pronto_available: boolean;
   pronto_available_since: string | null;
+  retainer_acceptance_required: boolean;
+};
+
+export type RetainerTerms = {
+  active_version: number;
+  retainer_body: string;
+  attorney_terms: string;
+  accepted: boolean;
 };
 
 export type PracticeArea = {
@@ -110,6 +118,20 @@ export async function setProntoAvailability(available: boolean): Promise<Result<
   return request<Availability>('PATCH', '/attorney/pronto/availability', {
     pronto_available: available,
   });
+}
+
+export async function getRetainerTerms(): Promise<Result<RetainerTerms>> {
+  return request<RetainerTerms>('GET', '/attorney/pronto/retainer-terms');
+}
+
+export async function acceptRetainerTerms(
+  version: number,
+): Promise<Result<{ accepted: boolean; version: number }>> {
+  return request<{ accepted: boolean; version: number }>(
+    'POST',
+    '/attorney/pronto/retainer-terms/accept',
+    { version },
+  );
 }
 
 export async function setProntoEnrollment(enabled: boolean): Promise<Result<Availability>> {
@@ -463,6 +485,9 @@ export async function listProntoTransactions(): Promise<Result<ProntoTransaction
 export type OpenRequest = {
   id: number;
   client_name: string;
+  client_state: string | null;
+  client_email: string | null;
+  client_phone: string | null;
   practice_area_name: string;
   fee_amount_cents: number;
   fee_currency: string;
@@ -527,4 +552,40 @@ export async function getProntoRetainerDocUrl(
     'GET',
     `/attorney/pronto/requests/${requestId}/retainer-url`,
   );
+}
+
+// ---------------------------------------------------------------------------
+// Pronto request detail (recent-activity detail view)
+// ---------------------------------------------------------------------------
+
+export type ProntoRequestPayment = {
+  amount_cents: number;
+  refund_cents: number;
+  net_cents: number;
+  status: 'completed' | 'refunded';
+  paid_at: string | null;
+};
+
+export type ProntoRequestDetail = {
+  id: number;
+  client_id: number;
+  client_name: string;
+  client_email: string | null;
+  client_phone: string | null;
+  practice_area_name: string;
+  status: string;
+  fee_amount_cents: number;
+  fee_currency: string;
+  accepted_at: string | null;
+  in_call_at: string | null;
+  completed_at: string | null;
+  has_retainer_doc: boolean;
+  pre_retainer_required: boolean;
+  payment: ProntoRequestPayment | null;
+};
+
+export async function getProntoRequestDetail(
+  id: number,
+): Promise<Result<ProntoRequestDetail>> {
+  return request<ProntoRequestDetail>('GET', `/attorney/pronto/requests/${id}/detail`);
 }

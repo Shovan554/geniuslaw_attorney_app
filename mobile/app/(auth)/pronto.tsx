@@ -16,7 +16,6 @@ import {
 import Animated, { Easing, FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppHeader } from '../../components/AppHeader';
-import { DocumentViewerModal } from '../../components/DocumentViewerModal';
 import { AppColors, fonts, radius, spacing } from '../../constants/theme';
 import { useTheme } from '../../contexts/ThemeContext';
 import { getAttorneyMe } from '../../lib/attorney';
@@ -26,15 +25,15 @@ import {
   Availability,
   acceptProntoCall,
   acceptProntoRequest,
+  acceptRetainerTerms,
   getProntoAvailability,
-  getProntoRetainerDocUrl,
-  listMyProntoRequests,
+  getRetainerTerms,
   listOpenRequests,
   listProntoActiveCalls,
   setProntoAvailability,
-  type AttorneyRequestItem,
   type OpenRequest,
   type ProntoActiveCall,
+  type RetainerTerms,
 } from '../../lib/pronto';
 
 type ModalState =
@@ -52,17 +51,6 @@ function formatMoney(cents: number, currency: string): string {
     }).format(cents / 100);
   } catch {
     return `$${(cents / 100).toFixed(0)}`;
-  }
-}
-
-function formatDate(iso: string | null): string {
-  if (!iso) return '';
-  try {
-    const hasTz = /([zZ]|[+-]\d{2}:?\d{2})$/.test(iso);
-    const d = new Date(hasTz ? iso : `${iso}Z`);
-    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-  } catch {
-    return '';
   }
 }
 
@@ -275,26 +263,25 @@ export default function ProntoScreen() {
   const [practiceAreas, setPracticeAreas] = useState<string[] | null>(null);
   const [openRequests, setOpenRequests] = useState<OpenRequest[]>([]);
   const [activeCalls, setActiveCalls] = useState<ProntoActiveCall[]>([]);
-  const [completed, setCompleted] = useState<AttorneyRequestItem[]>([]);
   const [modal, setModal] = useState<ModalState>(null);
   const [joiningCallId, setJoiningCallId] = useState<string | null>(null);
   const [acceptingId, setAcceptingId] = useState<number | null>(null);
-  const [openingDocId, setOpeningDocId] = useState<number | null>(null);
-  const [docUrl, setDocUrl] = useState<string | null>(null);
-  const [docTitle, setDocTitle] = useState<string>('Retainer');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [termsModalOpen, setTermsModalOpen] = useState(false);
+  const [terms, setTerms] = useState<RetainerTerms | null>(null);
+  const [termsLoading, setTermsLoading] = useState(false);
+  const [accepting, setAccepting] = useState(false);
 
   const load = useCallback(async (isRefresh = false) => {
     if (!isRefresh) setLoading(true);
     setError(null);
-    const [availRes, openRes, activeRes, mineRes, onboardingRes, meRes] = await Promise.all([
+    const [availRes, openRes, activeRes, onboardingRes, meRes] = await Promise.all([
       getProntoAvailability(),
       listOpenRequests(),
       listProntoActiveCalls(),
-      listMyProntoRequests(),
       getOnboardingStatus(),
       getAttorneyMe(),
     ]);
@@ -304,9 +291,6 @@ export default function ProntoScreen() {
     if (meRes.ok) setPracticeAreas(parsePracticeAreas(meRes.data.practice_areas));
     if (openRes.ok) setOpenRequests(openRes.data);
     if (activeRes.ok) setActiveCalls(activeRes.data.calls);
-    if (mineRes.ok) {
-      setCompleted(mineRes.data.filter((r) => r.status === 'completed'));
-    }
     setLoading(false);
     setRefreshing(false);
   }, []);
@@ -329,13 +313,6 @@ export default function ProntoScreen() {
         if (openRes.ok) setOpenRequests(openRes.data);
         if (activeRes.ok) setActiveCalls(activeRes.data.calls);
       };
-      // One-shot refresh of completed consultations on focus (e.g. returning
-      // from a call that just wrapped up) — not part of the 3s hot poll.
-      listMyProntoRequests().then((res) => {
-        if (!cancelled && res.ok) {
-          setCompleted(res.data.filter((r) => r.status === 'completed'));
-        }
-      });
       const handle = setInterval(tick, 3000);
       return () => {
         cancelled = true;
@@ -400,42 +377,59 @@ export default function ProntoScreen() {
     [joiningCallId, router],
   );
 
+  const openTermsModal = useCallback(async () => {
+    setTermsModalOpen(true);
+    if (terms) return;
+    setTermsLoading(true);
+    const res = await getRetainerTerms();
+    setTermsLoading(false);
+    if (!res.ok) {
+      setTermsModalOpen(false);
+      Alert.alert('Could not load terms', res.message);
+      return;
+    }
+    setTerms(res.data);
+  }, [terms]);
+
+  const handleAcceptTerms = useCallback(async () => {
+    if (!terms) return;
+    setAccepting(true);
+    const res = await acceptRetainerTerms(terms.active_version);
+    setAccepting(false);
+    if (!res.ok) {
+      Alert.alert('Could not accept', res.message);
+      return;
+    }
+    setTermsModalOpen(false);
+    setTerms(null);
+    await load();
+  }, [terms, load]);
+
   const handleToggle = useCallback(
     async (next: boolean) => {
       if (!availability || !availability.pronto_enabled) return;
+      if (next && availability.retainer_acceptance_required) {
+        openTermsModal();
+        return;
+      }
       setUpdating(true);
       const prev = availability;
       setAvailability({ ...availability, pronto_available: next });
       const res = await setProntoAvailability(next);
       if (!res.ok) {
         setAvailability(prev);
-        Alert.alert('Could not update availability', res.message);
+        await load();
+        if (res.message?.startsWith('RETAINER_ACCEPTANCE_REQUIRED')) {
+          openTermsModal();
+        } else {
+          Alert.alert('Could not update availability', res.message);
+        }
       } else {
         setAvailability(res.data);
       }
       setUpdating(false);
     },
-    [availability],
-  );
-
-  const openRetainer = useCallback(
-    async (req: AttorneyRequestItem) => {
-      if (openingDocId !== null) return;
-      if (!req.has_retainer_doc) {
-        Alert.alert('Not ready', 'The signed retainer for this consultation is still being prepared.');
-        return;
-      }
-      setOpeningDocId(req.id);
-      const res = await getProntoRetainerDocUrl(req.id);
-      setOpeningDocId(null);
-      if (!res.ok) {
-        Alert.alert('Could not open retainer', res.message);
-        return;
-      }
-      setDocTitle(`Retainer — ${req.practice_area_name}`);
-      setDocUrl(res.data.url);
-    },
-    [openingDocId],
+    [availability, openTermsModal, load],
   );
 
   const enrolled = availability?.pronto_enabled ?? false;
@@ -451,6 +445,7 @@ export default function ProntoScreen() {
     return openRequests.filter((r) => selected.has(r.practice_area_name.trim().toLowerCase()));
   }, [openRequests, practiceAreas]);
   const available = availability?.pronto_available ?? false;
+  const mustAcceptTerms = enrolled && (availability?.retainer_acceptance_required ?? false);
   const statusLabel = available
     ? formatSince(availability?.pronto_available_since ?? null) || 'You are on duty'
     : 'You are offline';
@@ -527,6 +522,34 @@ export default function ProntoScreen() {
           </Animated.View>
         ) : (
           <>
+            {mustAcceptTerms ? (
+              <Animated.View
+                entering={FadeInUp.delay(40).duration(500).easing(Easing.out(Easing.cubic))}
+                style={[styles.card, { backgroundColor: colors.card, borderColor: colors.accentBorder }]}
+              >
+                <View style={styles.rowHeader}>
+                  <Ionicons name="document-text-outline" size={20} color={colors.accent} />
+                  <Text style={[styles.cardTitle, { color: colors.text, fontFamily: fonts.sansSemiBold }]}>
+                    Review &amp; sign terms
+                  </Text>
+                </View>
+                <Text style={[styles.hint, { color: colors.textMuted, fontFamily: fonts.sans }]}>
+                  The retainer agreement has been updated. Review and accept it before going on duty.
+                </Text>
+                <Pressable
+                  onPress={openTermsModal}
+                  style={({ pressed }) => [
+                    styles.primaryBtn,
+                    { backgroundColor: colors.accent, opacity: pressed ? 0.85 : 1, marginTop: spacing.md },
+                  ]}
+                >
+                  <Text style={[styles.primaryBtnLabel, { color: colors.background, fontFamily: fonts.sansBold }]}>
+                    Review &amp; sign
+                  </Text>
+                </Pressable>
+              </Animated.View>
+            ) : null}
+
             {/* Availability toggle */}
             <Animated.View
               entering={FadeInUp.delay(60).duration(500).easing(Easing.out(Easing.cubic))}
@@ -543,7 +566,7 @@ export default function ProntoScreen() {
                 <Switch
                   value={available}
                   onValueChange={handleToggle}
-                  disabled={updating}
+                  disabled={updating || mustAcceptTerms}
                   trackColor={{ false: colors.cardBorder, true: colors.success }}
                   thumbColor={available ? colors.background : colors.textMuted}
                 />
@@ -551,11 +574,17 @@ export default function ProntoScreen() {
               <Text style={[styles.status, { color: colors.textMuted, fontFamily: fonts.sans }]}>
                 {statusLabel}
               </Text>
-              <Text style={[styles.hint, { color: colors.textMuted, fontFamily: fonts.sans }]}>
-                {available
-                  ? 'Incoming requests appear below. First to accept gets the client.'
-                  : 'Flip on when you are ready to take incoming Pronto clients.'}
-              </Text>
+              {mustAcceptTerms ? (
+                <Text style={[styles.hint, { color: colors.danger, fontFamily: fonts.sansMedium }]}>
+                  Please review and accept the new retainer and terms changes before going online.
+                </Text>
+              ) : (
+                <Text style={[styles.hint, { color: colors.textMuted, fontFamily: fonts.sans }]}>
+                  {available
+                    ? 'Incoming requests appear below. First to accept gets the client.'
+                    : 'Flip on when you are ready to take incoming Pronto clients.'}
+                </Text>
+              )}
             </Animated.View>
 
             {/* Active calls — join */}
@@ -632,6 +661,33 @@ export default function ProntoScreen() {
                             {req.attempt_count > 0 ? ' · re-listed' : ''}
                           </Text>
                         </View>
+                        {req.client_state ? (
+                          <View style={styles.reqClientRow}>
+                            <Ionicons name="location-outline" size={12} color={colors.textMuted} />
+                            <Text style={[styles.hint, { color: colors.textMuted, fontFamily: fonts.sans }]}>
+                              {req.client_state}
+                            </Text>
+                          </View>
+                        ) : null}
+                        {req.client_email ? (
+                          <View style={styles.reqClientRow}>
+                            <Ionicons name="mail-outline" size={12} color={colors.textMuted} />
+                            <Text
+                              style={[styles.hint, { color: colors.textMuted, fontFamily: fonts.sans, flex: 1 }]}
+                              numberOfLines={1}
+                            >
+                              {req.client_email}
+                            </Text>
+                          </View>
+                        ) : null}
+                        {req.client_phone ? (
+                          <View style={styles.reqClientRow}>
+                            <Ionicons name="call-outline" size={12} color={colors.textMuted} />
+                            <Text style={[styles.hint, { color: colors.textMuted, fontFamily: fonts.sans }]}>
+                              {req.client_phone}
+                            </Text>
+                          </View>
+                        ) : null}
                       </View>
                       <View style={[styles.feePill, { backgroundColor: colors.accentTint, borderColor: colors.accentBorder }]}>
                         <Text style={[styles.feePillText, { color: colors.accent, fontFamily: fonts.sansBold }]}>
@@ -673,53 +729,27 @@ export default function ProntoScreen() {
               )}
             </Animated.View>
 
-            {/* Completed consultations — tap to view the signed retainer */}
-            {completed.length > 0 ? (
-              <Animated.View entering={FadeInUp.delay(160).duration(500)} style={styles.section}>
-                <Text style={[styles.sectionLabel, { color: colors.textMuted, fontFamily: fonts.sansBold }]}>
-                  Completed consultations
+            {/* Recent activity link */}
+            <Pressable
+              onPress={() => router.push('/(auth)/pronto-activity')}
+              style={({ pressed }) => [
+                styles.linkCard,
+                { backgroundColor: colors.card, borderColor: colors.cardBorder, opacity: pressed ? 0.85 : 1 },
+              ]}
+            >
+              <View style={[styles.linkIcon, { backgroundColor: colors.accentTint, borderColor: colors.accentBorder }]}>
+                <Ionicons name="time-outline" size={18} color={colors.accent} />
+              </View>
+              <View style={styles.linkBody}>
+                <Text style={[styles.linkTitle, { color: colors.text, fontFamily: fonts.sansSemiBold }]}>
+                  Recent Activity
                 </Text>
-                {completed.map((req) => (
-                  <Pressable
-                    key={req.id}
-                    onPress={() => openRetainer(req)}
-                    disabled={openingDocId !== null}
-                    style={({ pressed }) => [
-                      styles.card,
-                      {
-                        backgroundColor: colors.card,
-                        borderColor: colors.cardBorder,
-                        opacity: openingDocId !== null && openingDocId !== req.id ? 0.5 : pressed ? 0.85 : 1,
-                      },
-                    ]}
-                  >
-                    <View style={styles.reqHeader}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.cardTitle, { color: colors.text, fontFamily: fonts.sansSemiBold }]}>
-                          {req.practice_area_name}
-                        </Text>
-                        <Text style={[styles.hint, { color: colors.textMuted, fontFamily: fonts.sans }]}>
-                          {req.client_name}
-                          {req.completed_at ? ` • ${formatDate(req.completed_at)}` : ''}
-                        </Text>
-                      </View>
-                      {openingDocId === req.id ? (
-                        <ActivityIndicator color={colors.accent} />
-                      ) : (
-                        <View style={styles.docHint}>
-                          <Ionicons
-                            name={req.has_retainer_doc ? 'document-text-outline' : 'time-outline'}
-                            size={18}
-                            color={req.has_retainer_doc ? colors.accent : colors.textMuted}
-                          />
-                          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-                        </View>
-                      )}
-                    </View>
-                  </Pressable>
-                ))}
-              </Animated.View>
-            ) : null}
+                <Text style={[styles.linkSubtitle, { color: colors.textMuted, fontFamily: fonts.sans }]}>
+                  Completed consultations, payments &amp; signed retainers
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+            </Pressable>
 
             {/* Payment history link */}
             <Pressable
@@ -753,12 +783,75 @@ export default function ProntoScreen() {
         onConfirmAccept={(req) => { setModal(null); doAccept(req); }}
       />
 
-      <DocumentViewerModal
-        visible={docUrl !== null}
-        url={docUrl}
-        title={docTitle}
-        onClose={() => setDocUrl(null)}
-      />
+      <Modal visible={termsModalOpen} animationType="slide" transparent onRequestClose={() => setTermsModalOpen(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' }}>
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder, maxHeight: '85%', borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg }]}>
+            <Text style={[styles.cardTitle, { color: colors.text, fontFamily: fonts.heading, marginBottom: spacing.sm }]}>
+              Review &amp; sign terms
+            </Text>
+            {termsLoading || !terms ? (
+              <ActivityIndicator color={colors.accent} style={{ marginVertical: spacing.xl }} />
+            ) : (
+              <ScrollView style={{ marginBottom: spacing.md }} showsVerticalScrollIndicator>
+                <View
+                  style={{
+                    borderWidth: 1,
+                    borderColor: colors.cardBorder,
+                    borderRadius: radius.md,
+                    backgroundColor: colors.background,
+                    padding: spacing.md,
+                    marginBottom: spacing.md,
+                  }}
+                >
+                  <Text style={[styles.cardTitle, { color: colors.text, fontFamily: fonts.heading, fontSize: 20, marginBottom: spacing.sm }]}>
+                    Retainer agreement
+                  </Text>
+                  <Text style={[styles.hint, { color: colors.text, fontFamily: fonts.sans }]}>
+                    {terms.retainer_body}
+                  </Text>
+                </View>
+                {terms.attorney_terms ? (
+                  <View
+                    style={{
+                      borderWidth: 1,
+                      borderColor: colors.cardBorder,
+                      borderRadius: radius.md,
+                      backgroundColor: colors.background,
+                      padding: spacing.md,
+                    }}
+                  >
+                    <Text style={[styles.cardTitle, { color: colors.text, fontFamily: fonts.heading, fontSize: 20, marginBottom: spacing.sm }]}>
+                      Attorney terms
+                    </Text>
+                    <Text style={[styles.hint, { color: colors.text, fontFamily: fonts.sans }]}>
+                      {terms.attorney_terms}
+                    </Text>
+                  </View>
+                ) : null}
+              </ScrollView>
+            )}
+            <Pressable
+              onPress={handleAcceptTerms}
+              disabled={accepting || termsLoading || !terms}
+              style={({ pressed }) => [
+                styles.primaryBtn,
+                { backgroundColor: colors.accent, opacity: accepting || termsLoading || !terms ? 0.6 : pressed ? 0.85 : 1 },
+              ]}
+            >
+              {accepting ? (
+                <ActivityIndicator color={colors.background} />
+              ) : (
+                <Text style={[styles.primaryBtnLabel, { color: colors.background, fontFamily: fonts.sansBold }]}>
+                  I accept
+                </Text>
+              )}
+            </Pressable>
+            <Pressable onPress={() => setTermsModalOpen(false)} style={{ marginTop: spacing.sm, marginBottom: spacing.xl, alignItems: 'center' }}>
+              <Text style={{ color: colors.textMuted, fontFamily: fonts.sansMedium }}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -819,7 +912,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   feePillText: { fontSize: 16 },
-  docHint: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   fee: { fontSize: 18 },
   primaryBtn: {
     flexDirection: 'row',

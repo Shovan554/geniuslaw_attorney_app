@@ -39,6 +39,13 @@ import { createSetupBundle, getSavedCard } from '../../lib/vault';
 
 const PLATFORM_FEE = '$39.95';
 
+// Value props shown on the terms step — the subscription unlocks both products.
+const TERMS_BENEFITS = [
+  'GeniusLaw Premium for case management — included',
+  'Instant Pronto consultations, paid upfront',
+  'Cancel anytime from your profile',
+];
+
 const TERMS_BODY =
   'Pronto!, a service of GeniusLaw, connects you with clients seeking immediate ' +
   'legal consultation. By agreeing, you authorize a recurring platform fee of ' +
@@ -300,9 +307,10 @@ export default function ProntoOnboardingScreen() {
         ? {
             icon: 'card-outline' as const,
             title: 'Add a payment method',
-            body: "You're verified. Add a card we'll keep on file for the Pronto platform fee.",
+            body: "You're verified. Add a card we'll keep on file for the Pronto platform fee. Your card is stored securely by Stripe — GeniusLaw never saves your card information.",
             points: [
               `${PLATFORM_FEE}/month platform fee, billed immediately`,
+              'Stored securely by Stripe — GeniusLaw never sees your card details',
               'Cancel anytime from your profile',
             ],
             cta: 'Add card',
@@ -484,19 +492,34 @@ export default function ProntoOnboardingScreen() {
 
               {step === 'terms' ? (
                 <>
-                  <View style={[styles.feePill, { backgroundColor: colors.accentTint, borderColor: colors.accentBorder }]}>
-                    <Text style={[styles.feePillText, { color: colors.accent, fontFamily: fonts.sansBold }]}>
-                      {PLATFORM_FEE} / month
-                    </Text>
-                  </View>
-                  <View style={[styles.termsBox, { backgroundColor: colors.card, borderColor: colors.cardBorder, borderLeftColor: colors.accent }]}>
-                    <View style={styles.termsHeader}>
-                      <Ionicons name="document-text-outline" size={16} color={colors.accent} />
-                      <Text style={[styles.termsHeaderText, { color: colors.accent, fontFamily: fonts.sansBold }]}>
-                        Subscription terms
+                  <Text style={[styles.heroBody, { color: colors.textMuted, fontFamily: fonts.sans }]}>
+                    One subscription unlocks Pronto and your full GeniusLaw workspace.
+                  </Text>
+
+                  <View style={[styles.planCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+                    <View style={styles.planPriceRow}>
+                      <Text style={[styles.planPrice, { color: colors.text, fontFamily: fonts.heading }]}>
+                        {PLATFORM_FEE}
+                      </Text>
+                      <Text style={[styles.planPeriod, { color: colors.textMuted, fontFamily: fonts.sans }]}>
+                        /month
                       </Text>
                     </View>
-                    <Text style={[styles.termsText, { color: colors.text, fontFamily: fonts.sans }]}>
+
+                    <View style={[styles.planDivider, { backgroundColor: colors.cardBorder }]} />
+
+                    {TERMS_BENEFITS.map((b) => (
+                      <View key={b} style={styles.benefitRow}>
+                        <Ionicons name="checkmark-circle" size={18} color={colors.accent} />
+                        <Text style={[styles.benefitText, { color: colors.text, fontFamily: fonts.sans }]}>
+                          {b}
+                        </Text>
+                      </View>
+                    ))}
+
+                    <View style={[styles.planDivider, { backgroundColor: colors.cardBorder }]} />
+
+                    <Text style={[styles.finePrint, { color: colors.text, fontFamily: fonts.sans }]}>
                       {hero.body}
                     </Text>
                   </View>
@@ -620,31 +643,31 @@ const styles = StyleSheet.create({
   },
 
   // Terms-specific
-  feePill: {
-    marginTop: spacing.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 6,
-    borderRadius: radius.full,
-    borderWidth: 1,
-  },
-  feePillText: { fontSize: 14, letterSpacing: 0.3 },
-  termsBox: {
+  planCard: {
     alignSelf: 'stretch',
     marginTop: spacing.lg,
     borderWidth: 1,
-    borderLeftWidth: 3,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     paddingVertical: spacing.lg,
     paddingHorizontal: spacing.lg,
   },
-  termsHeader: {
+  planPriceRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center' },
+  planPrice: { fontSize: 34, letterSpacing: 0.2 },
+  planPeriod: { fontSize: 15, marginLeft: 4 },
+  planDivider: { height: 1, alignSelf: 'stretch', marginVertical: spacing.lg },
+  benefitRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
-    marginBottom: spacing.sm,
+    gap: spacing.sm,
+    marginBottom: spacing.md,
   },
-  termsHeaderText: { fontSize: 12, letterSpacing: 0.6, textTransform: 'uppercase' },
-  termsText: { fontSize: 15, lineHeight: 23, textAlign: 'left' },
+  benefitText: { flex: 1, fontSize: 13.5, lineHeight: 19 },
+  finePrint: {
+    alignSelf: 'stretch',
+    fontSize: 15.5,
+    lineHeight: 23,
+    textAlign: 'left',
+  },
 
   // Practice areas
   practicesWrap: { alignSelf: 'stretch', marginTop: spacing.xl },
