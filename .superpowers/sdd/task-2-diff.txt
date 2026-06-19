@@ -1,0 +1,31 @@
+diff --git a/backend/services/calls_service.py b/backend/services/calls_service.py
+index f39301f..e693b6b 100644
+--- a/backend/services/calls_service.py
++++ b/backend/services/calls_service.py
+@@ -1260,10 +1260,26 @@ def list_active_calls_for_attorney(attorney_id: int) -> List[dict]:
+                 "practice_area_id": int(raw_area) if raw_area is not None else None,
+                 "client_id": int(r["client_id"]),
+                 "client_name": client_row.get("full_name") or "Client",
+                 "practice_area_name": practice_area_name,
+                 "status": r.get("status") or "initiated",
+                 "is_video": bool(r.get("is_video")),
+                 "started_at": r.get("started_at") or "",
+             }
+         )
+     return out
++
++
++def create_test_call_room(attorney_name: str, is_video: bool) -> dict:
++    """Mint a real, throwaway Daily room + token for the attorney "test call".
++
++    Reuses the production Daily helpers but performs NO database writes — no
++    pronto_calls / pronto_requests rows are created. The room self-expires via
++    ROOM_TTL_SECONDS like any other.
++    """
++    room = _create_daily_room(is_video=is_video)
++    token = _mint_meeting_token(room["name"], attorney_name or "Attorney")
++    return {
++        "daily_room_url": room["url"],
++        "daily_meeting_token": token,
++        "is_video": bool(is_video),
++    }

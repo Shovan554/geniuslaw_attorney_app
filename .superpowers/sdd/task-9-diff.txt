@@ -1,0 +1,188 @@
+diff --git a/mobile/app/(auth)/pronto-onboarding.tsx b/mobile/app/(auth)/pronto-onboarding.tsx
+index 0f64b17..8e0ff24 100644
+--- a/mobile/app/(auth)/pronto-onboarding.tsx
++++ b/mobile/app/(auth)/pronto-onboarding.tsx
+@@ -14,12 +14,13 @@ import {
+   TouchableOpacity,
+   View,
+ } from 'react-native';
+ import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+ import { SafeAreaView } from 'react-native-safe-area-context';
+ import { PracticeAreaPicker } from '../../components/PracticeAreaPicker';
++import { TestCallEntry } from '../../components/TestCallEntry';
+ import { fonts, radius, spacing } from '../../constants/theme';
+ import { useTheme } from '../../contexts/ThemeContext';
+ import { getAttorneyMe } from '../../lib/attorney';
+ import {
+   acceptProntoTerms,
+   connectRefresh,
+@@ -562,12 +563,15 @@ export default function ProntoOnboardingScreen() {
+               ) : null}
+             </Animated.View>
+           </ScrollView>
+ 
+           {/* Sticky footer CTA */}
+           <View style={[styles.footer, { borderTopColor: colors.cardBorder }]}>
++            <View style={{ marginBottom: spacing.md }}>
++              <TestCallEntry />
++            </View>
+             {message ? (
+               <Text style={[styles.status, { color: colors.textMuted, fontFamily: fonts.sans }]}>
+                 {message}
+               </Text>
+             ) : null}
+             <TouchableOpacity
+diff --git a/mobile/app/(auth)/pronto.tsx b/mobile/app/(auth)/pronto.tsx
+index 563a8d8..f38635e 100644
+--- a/mobile/app/(auth)/pronto.tsx
++++ b/mobile/app/(auth)/pronto.tsx
+@@ -13,12 +13,13 @@ import {
+   Text,
+   View,
+ } from 'react-native';
+ import Animated, { Easing, FadeInDown, FadeInUp } from 'react-native-reanimated';
+ import { SafeAreaView } from 'react-native-safe-area-context';
+ import { AppHeader } from '../../components/AppHeader';
++import { TestCallEntry } from '../../components/TestCallEntry';
+ import { AppColors, fonts, radius, spacing } from '../../constants/theme';
+ import { useTheme } from '../../contexts/ThemeContext';
+ import { getAttorneyMe } from '../../lib/attorney';
+ import { getOnboardingStatus, type OnboardingStatus } from '../../lib/onboarding';
+ import { parsePracticeAreas } from '../../lib/practiceAreas';
+ import {
+@@ -470,59 +471,69 @@ export default function ProntoScreen() {
+             </Text>
+             <Pressable onPress={() => load()} hitSlop={10}>
+               <Text style={{ color: colors.accent, fontFamily: fonts.sansSemiBold }}>Retry</Text>
+             </Pressable>
+           </View>
+         ) : !enrolled && onboardingComplete ? (
+-          <Animated.View
+-            entering={FadeInUp.delay(60).duration(500).easing(Easing.out(Easing.cubic))}
+-            style={[styles.allSetCard, { backgroundColor: colors.card, borderColor: colors.accentBorder }]}
+-          >
+-            <View
+-              style={[
+-                styles.allSetBadge,
+-                { backgroundColor: 'rgba(76,175,125,0.12)', borderColor: 'rgba(76,175,125,0.40)' },
+-              ]}
++          <>
++            <Animated.View
++              entering={FadeInUp.delay(60).duration(500).easing(Easing.out(Easing.cubic))}
++              style={[styles.allSetCard, { backgroundColor: colors.card, borderColor: colors.accentBorder }]}
+             >
+-              <Ionicons name="checkmark-circle" size={46} color={colors.success} />
+-            </View>
+-            <Text style={[styles.allSetTitle, { color: colors.text, fontFamily: fonts.heading }]}>
+-              You&apos;re all set
+-            </Text>
+-            <Text style={[styles.allSetHint, { color: colors.textMuted, fontFamily: fonts.sans }]}>
+-              Please wait for a staff member to enable Pronto access for you. You&apos;ll be able to
+-              go on duty here as soon as your account is enabled.
+-            </Text>
+-          </Animated.View>
+-        ) : !enrolled ? (
+-          <Animated.View
+-            entering={FadeInUp.delay(60).duration(500).easing(Easing.out(Easing.cubic))}
+-            style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
+-          >
+-            <View style={styles.rowHeader}>
+-              <View style={[styles.dot, { backgroundColor: colors.textMuted }]} />
+-              <Text style={[styles.cardTitle, { color: colors.text, fontFamily: fonts.sansSemiBold }]}>
+-                Not enrolled
++              <View
++                style={[
++                  styles.allSetBadge,
++                  { backgroundColor: 'rgba(76,175,125,0.12)', borderColor: 'rgba(76,175,125,0.40)' },
++                ]}
++              >
++                <Ionicons name="checkmark-circle" size={46} color={colors.success} />
++              </View>
++              <Text style={[styles.allSetTitle, { color: colors.text, fontFamily: fonts.heading }]}>
++                You&apos;re all set
++              </Text>
++              <Text style={[styles.allSetHint, { color: colors.textMuted, fontFamily: fonts.sans }]}>
++                Please wait for a staff member to enable Pronto access for you. You&apos;ll be able to
++                go on duty here as soon as your account is enabled.
+               </Text>
++            </Animated.View>
++            <View style={{ marginTop: spacing.md }}>
++              <TestCallEntry />
+             </View>
+-            <Text style={[styles.hint, { color: colors.textMuted, fontFamily: fonts.sans }]}>
+-              Get set up for Pronto: verify your identity, add a payment method, and accept the
+-              platform terms. A staff member enables your access once you&apos;re done.
+-            </Text>
+-            <Pressable
+-              onPress={() => router.push('/pronto-onboarding')}
+-              style={({ pressed }) => [
+-                styles.primaryBtn,
+-                { backgroundColor: colors.accent, opacity: pressed ? 0.85 : 1, marginTop: spacing.md },
+-              ]}
++          </>
++        ) : !enrolled ? (
++          <>
++            <Animated.View
++              entering={FadeInUp.delay(60).duration(500).easing(Easing.out(Easing.cubic))}
++              style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
+             >
+-              <Text style={[styles.primaryBtnLabel, { color: colors.background, fontFamily: fonts.sansBold }]}>
+-                Get Pronto access
++              <View style={styles.rowHeader}>
++                <View style={[styles.dot, { backgroundColor: colors.textMuted }]} />
++                <Text style={[styles.cardTitle, { color: colors.text, fontFamily: fonts.sansSemiBold }]}>
++                  Not enrolled
++                </Text>
++              </View>
++              <Text style={[styles.hint, { color: colors.textMuted, fontFamily: fonts.sans }]}>
++                Get set up for Pronto: verify your identity, add a payment method, and accept the
++                platform terms. A staff member enables your access once you&apos;re done.
+               </Text>
+-            </Pressable>
+-          </Animated.View>
++              <Pressable
++                onPress={() => router.push('/pronto-onboarding')}
++                style={({ pressed }) => [
++                  styles.primaryBtn,
++                  { backgroundColor: colors.accent, opacity: pressed ? 0.85 : 1, marginTop: spacing.md },
++                ]}
++              >
++                <Text style={[styles.primaryBtnLabel, { color: colors.background, fontFamily: fonts.sansBold }]}>
++                  Get Pronto access
++                </Text>
++              </Pressable>
++            </Animated.View>
++            <View style={{ marginTop: spacing.md }}>
++              <TestCallEntry />
++            </View>
++          </>
+         ) : (
+           <>
+             {mustAcceptTerms ? (
+               <Animated.View
+                 entering={FadeInUp.delay(40).duration(500).easing(Easing.out(Easing.cubic))}
+                 style={[styles.card, { backgroundColor: colors.card, borderColor: colors.accentBorder }]}
+diff --git a/mobile/lib/notifications.ts b/mobile/lib/notifications.ts
+index 051caab..52d466a 100644
+--- a/mobile/lib/notifications.ts
++++ b/mobile/lib/notifications.ts
+@@ -163,13 +163,18 @@ export async function registerForPushNotifications(): Promise<boolean> {
+   const ok = await postPushToken({ expo_token: expoToken, platform, device_id: deviceId });
+   console.log('[push] backend registration:', ok ? 'ok' : 'failed', 'device', deviceId);
+   return ok;
+ }
+ 
+ export function routeFromNotificationData(router: Router, _data: NotificationData): void {
+-  // v1: every Pronto notification routes to the Pronto tab. Sub-routing
++  // Test-call demo notifications open the dedicated test screen.
++  if (_data.genre === 'pronto_test') {
++    router.push('/(auth)/pronto-test' as never);
++    return;
++  }
++  // v1: every other Pronto notification routes to the Pronto tab. Sub-routing
+   // (e.g. signing → /signings/:id) can be added when more genres land.
+   router.push('/(auth)/pronto' as never);
+ }
+ 
+ type Subscription = { remove: () => void };
+ 

@@ -166,7 +166,12 @@ export async function registerForPushNotifications(): Promise<boolean> {
 }
 
 export function routeFromNotificationData(router: Router, _data: NotificationData): void {
-  // v1: every Pronto notification routes to the Pronto tab. Sub-routing
+  // Test-call demo notifications open the dedicated test screen.
+  if (_data.genre === 'pronto_test') {
+    router.push('/(auth)/pronto-test' as never);
+    return;
+  }
+  // v1: every other Pronto notification routes to the Pronto tab. Sub-routing
   // (e.g. signing → /signings/:id) can be added when more genres land.
   router.push('/(auth)/pronto' as never);
 }

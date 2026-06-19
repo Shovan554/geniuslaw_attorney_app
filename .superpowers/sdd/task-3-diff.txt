@@ -1,0 +1,129 @@
+diff --git a/backend/routers/attorney_notifications.py b/backend/routers/attorney_notifications.py
+index 5329021..c563121 100644
+--- a/backend/routers/attorney_notifications.py
++++ b/backend/routers/attorney_notifications.py
+@@ -220,16 +220,17 @@ def list_my_notifications(
+ ) -> AttorneyNotificationListResponse:
+     attorney_id = int(payload["attorney_id"])
+     sb = get_supabase()
+     resp = (
+         sb.table("attorney_notifications")
+         .select(NOTIFICATION_COLS)
+         .eq("attorney_id", attorney_id)
+         .is_("dismissed_at", "null")
++        .neq("genre", "pronto_test")
+         .order("created_at", desc=True)
+         .limit(100)
+         .execute()
+     )
+     rows = resp.data or []
+     return AttorneyNotificationListResponse(
+         notifications=[AttorneyNotificationItem(**r) for r in rows]
+     )
+diff --git a/backend/routers/attorney_pronto.py b/backend/routers/attorney_pronto.py
+index f19530f..f487ea4 100644
+--- a/backend/routers/attorney_pronto.py
++++ b/backend/routers/attorney_pronto.py
+@@ -1,19 +1,23 @@
+ import logging
++import uuid
+ from datetime import datetime, timezone, timedelta
+ 
+ from fastapi import APIRouter, Depends, HTTPException, status
+ from pydantic import BaseModel, field_serializer
+ 
+ from middleware.auth_middleware import require_attorney
+ from services.attorney_matching import attorney_serves_state
+ from services.supabase_client import get_supabase
+ from services.pronto_transactions import build_transactions_summary
+ from services.pronto_request_detail import build_request_payment
++from services.calls_service import create_test_call_room
++from services.pronto_test import build_test_notification, build_test_start_response
++from services.pronto_test import TEST_CLIENT_NAME
+ from services.retainer_acceptance import (
+     RETAINER_ACCEPTANCE_REQUIRED,
+     is_acceptance_current,
+     should_force_offline,
+ )
+ 
+ log = logging.getLogger(__name__)
+ 
+@@ -751,8 +755,78 @@ async def list_transactions(payload: dict = Depends(require_attorney)):
+         log.warning(
+             "Pronto transactions cap (%s) reached for attorney_id=%s; "
+             "totals/list may be truncated",
+             TRANSACTIONS_CAP,
+             attorney_id,
+         )
+ 
+     return build_transactions_summary(rows, datetime.now(timezone.utc))
++
++
++# ---------------------------------------------------------------------------
++# Attorney "test call" demo — for not-yet-enabled attorneys to preview Pronto.
++# The ONLY DB write here is a single (hidden) attorney_notifications row.
++# ---------------------------------------------------------------------------
++
++class TestStartResponse(BaseModel):
++    call_id: str
++    client_name: str
++    practice_area_name: str
++    fee_amount_cents: int
++    fee_currency: str
++    is_video: bool
++
++
++class TestCallRequest(BaseModel):
++    call_id: str
++    is_video: bool = True
++
++
++class TestCallResponse(BaseModel):
++    call_id: str
++    signing_id: int | None = None
++    practice_area_id: int | None = None
++    daily_room_url: str
++    daily_meeting_token: str
++    is_video: bool
++    client_name: str
++
++
++@router.post("/test/start", response_model=TestStartResponse)
++async def start_test_call(payload: dict = Depends(require_attorney)):
++    """Fire the real push banner (one notification row) and return the dummy
++    open-request payload the mobile test screen renders."""
++    attorney_id = int(payload["attorney_id"])
++    sb = get_supabase()
++    sb.table("attorney_notifications").insert(
++        build_test_notification(attorney_id)
++    ).execute()
++    call_id = str(uuid.uuid4())
++    return TestStartResponse(**build_test_start_response(call_id))
++
++
++@router.post("/test/call", response_model=TestCallResponse)
++async def start_test_call_room(
++    body: TestCallRequest, payload: dict = Depends(require_attorney)
++):
++    """Mint a real (throwaway) Daily room/token for the test call. No DB writes."""
++    attorney_id = int(payload["attorney_id"])
++    att = (
++        get_supabase()
++        .table("attorneys")
++        .select("full_name")
++        .eq("id", attorney_id)
++        .limit(1)
++        .execute()
++    )
++    rows = att.data or []
++    attorney_name = (rows[0].get("full_name") if rows else "") or "Attorney"
++    room = create_test_call_room(attorney_name, body.is_video)
++    return TestCallResponse(
++        call_id=body.call_id,
++        signing_id=None,
++        practice_area_id=None,
++        daily_room_url=room["daily_room_url"],
++        daily_meeting_token=room["daily_meeting_token"],
++        is_video=room["is_video"],
++        client_name=TEST_CLIENT_NAME,
++    )

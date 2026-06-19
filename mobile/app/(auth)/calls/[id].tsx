@@ -5,7 +5,7 @@ import Daily, {
   DailyMediaView,
   DailyParticipant,
 } from '@daily-co/react-native-daily-js';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -35,6 +35,20 @@ function formatElapsed(seconds: number): string {
 
 export default function InCallScreen() {
   const { colors } = useTheme();
+  const navigation = useNavigation();
+
+  // Block the swipe-right back gesture while in a call. The nested calls
+  // stack already sets gestureEnabled:false for this screen, but this screen
+  // is pushed as the `calls` group onto the root (auth) stack, whose card
+  // still has the default iOS swipe-back enabled — swiping right there pops
+  // the whole calls group and yanks the attorney out of the call. Disable the
+  // parent navigator's gesture while this screen is mounted, and restore it on
+  // exit so the call-history list keeps its normal swipe-back.
+  useEffect(() => {
+    const parent = navigation.getParent();
+    parent?.setOptions({ gestureEnabled: false });
+    return () => parent?.setOptions({ gestureEnabled: true });
+  }, [navigation]);
   const params = useLocalSearchParams<{
     id: string;
     url: string;
@@ -42,6 +56,7 @@ export default function InCallScreen() {
     name?: string;
     video?: string;
     pronto?: string;
+    test?: string;
   }>();
   const calleeName = params.name || 'Client';
   const callId = params.id;
@@ -49,6 +64,7 @@ export default function InCallScreen() {
   const meetingToken = params.token;
   const isVideoCall = params.video === '1';
   const isPronto = params.pronto === '1';
+  const isTest = params.test === '1';
 
   // Pronto wrap-up: after the attorney hangs up an answered Pronto call, the
   // backend tells us `requires_wrap_up: true`. We then block this screen on
@@ -75,6 +91,10 @@ export default function InCallScreen() {
       if (endingRef.current) return;
       endingRef.current = true;
       setStatus('ended');
+      if (isTest) {
+        router.back();
+        return;
+      }
       const wasConnected = connectedAtRef.current != null;
       let finalStatus: string | null = null;
       let needsWrapUp = false;
@@ -109,7 +129,7 @@ export default function InCallScreen() {
       }
       router.back();
     },
-    [callId, calleeName, isPronto],
+    [callId, calleeName, isPronto, isTest],
   );
 
   // Pin reportEnded into a ref so the Daily-setup useEffect below can call
@@ -135,6 +155,7 @@ export default function InCallScreen() {
   // makes it into the room; they're silent on declines from a killed app
   // and on server-side ring timeouts. This poll catches those.
   useEffect(() => {
+    if (isTest) return; // test rooms are solo; no server-side call status to poll
     if (status === 'connected' || status === 'ended') return;
     if (endingRef.current) return;
     let cancelled = false;
@@ -169,7 +190,7 @@ export default function InCallScreen() {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [callId, status, reportEnded, isPronto]);
+  }, [callId, status, reportEnded, isPronto, isTest]);
 
   useEffect(() => {
     if (!roomUrl || !meetingToken) {
@@ -185,8 +206,20 @@ export default function InCallScreen() {
     callRef.current = co;
 
     const onJoined = () => {
-      setStatus('ringing');
       syncParticipants(co);
+      if (isTest) {
+        // Solo test room: no remote ever joins, so simulate a connected call
+        // (label + running timer) the moment we're in the room.
+        connectedAtRef.current = Date.now();
+        setStatus('connected');
+        elapsedTimerRef.current = setInterval(() => {
+          if (connectedAtRef.current) {
+            setElapsedSec(Math.floor((Date.now() - connectedAtRef.current) / 1000));
+          }
+        }, 1000);
+        return;
+      }
+      setStatus('ringing');
     };
     const onParticipantJoined = (e: any) => {
       syncParticipants(co);
@@ -264,7 +297,7 @@ export default function InCallScreen() {
     // deliberately omit `reportEnded` from deps and call it via
     // `reportEndedRef.current(...)` instead — see comment above the ref.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roomUrl, meetingToken, isVideoCall, syncParticipants]);
+  }, [roomUrl, meetingToken, isVideoCall, syncParticipants, isTest]);
 
   const handleMuteToggle = useCallback(() => {
     const co = callRef.current;
@@ -306,18 +339,44 @@ export default function InCallScreen() {
   // Background for video call: dark to make tiles pop
   const bgColor = isVideoCall ? '#000000' : colors.background;
 
+  // In a solo test room there is no remote participant, so promote the
+  // attorney's own camera to the full-screen tile (otherwise they'd only see
+  // the placeholder avatar and a tiny PiP of themselves).
+  const showSelfAsMain =
+    isTest && isVideoCall && !!localParticipant?.videoTrack && !cameraOff;
   const showRemoteVideo =
+    !isTest &&
     isVideoCall &&
     remoteParticipant?.videoTrack &&
     remoteParticipant?.video !== false;
   const showLocalVideo =
-    isVideoCall && localParticipant?.videoTrack && !cameraOff;
+    isVideoCall && localParticipant?.videoTrack && !cameraOff && !showSelfAsMain;
 
   return (
     <SafeAreaView
       edges={['top', 'bottom']}
       style={[styles.container, { backgroundColor: bgColor }]}
     >
+      {showSelfAsMain ? (
+        <View style={StyleSheet.absoluteFill}>
+          <DailyMediaView
+            videoTrack={localParticipant!.videoTrack as any}
+            audioTrack={null}
+            objectFit="cover"
+            mirror
+            zOrder={0}
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={styles.topScrim} />
+        </View>
+      ) : null}
+
+      {isTest ? (
+        <View style={styles.testBadge} pointerEvents="none">
+          <Text style={styles.testBadgeText}>TEST MODE</Text>
+        </View>
+      ) : null}
+
       {/* Remote video (full-screen background) — video mode only */}
       {showRemoteVideo ? (
         <View style={StyleSheet.absoluteFill}>
@@ -661,6 +720,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   endIcon: { transform: [{ rotate: '135deg' }] },
+
+  testBadge: {
+    position: 'absolute',
+    top: spacing.xl,
+    alignSelf: 'center',
+    zIndex: 20,
+    backgroundColor: 'rgba(201,168,76,0.92)',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.full,
+  },
+  testBadgeText: {
+    color: '#0B0F1A',
+    fontSize: 12,
+    letterSpacing: 1,
+    fontWeight: '700',
+  },
 
   wrapUpBackdrop: {
     flex: 1,

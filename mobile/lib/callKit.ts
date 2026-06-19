@@ -7,6 +7,7 @@ import {
   registerProntoFcmToken,
   registerProntoVoipToken,
 } from './pronto';
+import { clearTestCall, handleTestCallAnswer, isTestCall } from './testCall';
 
 const APP_NAME = 'GeniusLaw Attorney';
 const IOS_BUNDLE_ID = 'com.geniuslaw.attorney';
@@ -90,6 +91,11 @@ export async function initCallKit(_userId: number): Promise<void> {
 
   RNCallKeep.addEventListener('answerCall', async ({ callUUID }: { callUUID: string }) => {
     console.log('[callKit] answerCall', callUUID);
+    if (isTestCall(callUUID)) {
+      await handleTestCallAnswer(callUUID);
+      endCallKit(callUUID);
+      return;
+    }
     try {
       const res = await acceptProntoCall(callUUID);
       if (!res.ok) throw new Error(res.message);
@@ -112,6 +118,10 @@ export async function initCallKit(_userId: number): Promise<void> {
 
   RNCallKeep.addEventListener('endCall', async ({ callUUID }: { callUUID: string }) => {
     console.log('[callKit] endCall', callUUID);
+    if (isTestCall(callUUID)) {
+      clearTestCall(callUUID);
+      return;
+    }
     try {
       await endProntoCall(callUUID, 'declined');
     } catch {
@@ -207,6 +217,13 @@ async function initAndroidCalls(): Promise<void> {
 
   const handleAnswer = async (callUUID: string) => {
     console.log('[callKit] (android) answerCall', callUUID);
+    if (isTestCall(callUUID)) {
+      try { RNCallKeep.backToForeground(); } catch {}
+      try { RNCallKeep.setCurrentCallActive(callUUID); } catch {}
+      await handleTestCallAnswer(callUUID);
+      try { RNCallKeep.endCall(callUUID); } catch {}
+      return;
+    }
     try {
       RNCallKeep.backToForeground();
     } catch (e) {
@@ -244,6 +261,10 @@ async function initAndroidCalls(): Promise<void> {
   };
 
   const handleEnd = async (callUUID: string) => {
+    if (isTestCall(callUUID)) {
+      clearTestCall(callUUID);
+      return;
+    }
     if (acceptedCallUUIDs.has(callUUID)) {
       acceptedCallUUIDs.delete(callUUID);
       console.log('[callKit] (android) endCall ignored (post-accept)', callUUID);
