@@ -1,13 +1,14 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ActivityIndicator,
   Image,
   KeyboardAvoidingView,
   Linking,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -28,9 +29,28 @@ import Animated, {
 import { useTheme } from '../contexts/ThemeContext';
 import { fonts, radius, spacing } from '../constants/theme';
 import type { AppColors } from '../constants/theme';
-import { signIn, verifyTotp } from '../lib/auth';
+import { signIn, verifyTotp, isBiometricEnabled, biometricLogin, enableBiometric, getBiometricUser } from '../lib/auth';
+import type { PublicUser } from '../lib/auth';
+import { getBiometricCapability, promptBiometric } from '../lib/biometric';
 
 type Step = 'credentials' | 'totp';
+
+// The recognizable "Face ID" glyph for facial recognition, fingerprint glyph otherwise.
+const bioIconName = (
+  label: string,
+): React.ComponentProps<typeof MaterialCommunityIcons>['name'] =>
+  label === 'Face ID' ? 'face-recognition' : 'fingerprint';
+
+// "Jane Doe" -> "Jane D.", single name as-is, else the email.
+const shortName = (user: PublicUser | null): string => {
+  if (!user) return '';
+  const full = user.full_name?.trim();
+  if (full) {
+    const parts = full.split(/\s+/);
+    return parts.length >= 2 ? `${parts[0]} ${parts[parts.length - 1][0]}.` : parts[0];
+  }
+  return user.email;
+};
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -53,6 +73,23 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [termsAccepted, setTermsAccepted] = useState(false);
+
+  const [bioEnabled, setBioEnabled] = useState(false);
+  const [bioLabel, setBioLabel] = useState('biometrics');
+  const [bioAvailable, setBioAvailable] = useState(false);
+  const [bioName, setBioName] = useState('');
+  const [showEnrollSheet, setShowEnrollSheet] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const cap = await getBiometricCapability();
+      setBioAvailable(cap.available);
+      setBioLabel(cap.label);
+      const enabled = await isBiometricEnabled();
+      setBioEnabled(enabled);
+      if (enabled) setBioName(shortName(await getBiometricUser()));
+    })();
+  }, []);
 
   const TERMS_KEY = 'gla_terms_accepted_v1';
 
@@ -114,7 +151,7 @@ export default function LoginScreen() {
         router.replace('/(auth)/dashboard');
         return;
       }
-      router.replace('/(auth)/dashboard');
+      await finishLogin();
     }
   };
 
@@ -127,7 +164,31 @@ export default function LoginScreen() {
     if (result.status === 'error') {
       setError(result.message);
     } else if (result.status === 'success') {
+      await finishLogin();
+    }
+  };
+
+  // Called after any successful password/2FA login. Offers enrollment, else redirects.
+  const finishLogin = async () => {
+    if (bioAvailable && !(await isBiometricEnabled())) {
+      setShowEnrollSheet(true);
+      return;
+    }
+    router.replace('/(auth)/dashboard');
+  };
+
+  const handleBiometricLogin = async () => {
+    setError('');
+    const ok = await promptBiometric(`Sign in to GeniusLaw with ${bioLabel}`);
+    if (!ok) return; // user cancelled — stay on password form, no noise
+    setLoading(true);
+    const result = await biometricLogin();
+    setLoading(false);
+    if (result.status === 'success') {
       router.replace('/(auth)/dashboard');
+    } else {
+      setBioEnabled(false); // biometricLogin cleared the keys on expiry
+      setError(result.status === 'error' ? result.message : 'Could not sign in. Please use your password.');
     }
   };
 
@@ -241,6 +302,20 @@ export default function LoginScreen() {
                       }
                     </TouchableOpacity>
                   </View>
+                  {bioEnabled && bioAvailable && (
+                    <TouchableOpacity
+                      style={s.bioButton}
+                      onPress={handleBiometricLogin}
+                      disabled={loading}
+                      activeOpacity={0.8}
+                    >
+                      <MaterialCommunityIcons name={bioIconName(bioLabel)} size={22} color={colors.accent} />
+                      <View style={s.bioButtonTextWrap}>
+                        <Text style={s.bioButtonText}>Sign in with {bioLabel}</Text>
+                        {bioName ? <Text style={s.bioButtonSub}>as {bioName}</Text> : null}
+                      </View>
+                    </TouchableOpacity>
+                  )}
                   <TouchableOpacity
                     style={s.forgotWrap}
                     onPress={() => router.push('/forgot-password')}
@@ -307,6 +382,39 @@ export default function LoginScreen() {
           </Text>
         </View>
       </SafeAreaView>
+      <Modal visible={showEnrollSheet} transparent animationType="fade">
+        <View style={s.sheetBackdrop}>
+          <View style={s.sheetCard}>
+            <View style={s.sheetIconBox}>
+              <MaterialCommunityIcons name={bioIconName(bioLabel)} size={44} color={colors.accent} />
+            </View>
+            <Text style={s.sheetTitle}>Sign in with {bioLabel}</Text>
+            <Text style={s.sheetBody}>
+              Skip your password next time — use {bioLabel} to sign in instantly and securely.
+            </Text>
+            <TouchableOpacity
+              style={s.sheetPrimary}
+              activeOpacity={0.85}
+              onPress={async () => {
+                const ok = await promptBiometric(`Enable ${bioLabel} sign-in`);
+                if (ok) await enableBiometric();
+                setShowEnrollSheet(false);
+                router.replace('/(auth)/dashboard');
+              }}
+            >
+              <MaterialCommunityIcons name={bioIconName(bioLabel)} size={20} color="#fff" />
+              <Text style={s.sheetPrimaryText}>Enable {bioLabel}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={s.sheetSecondary}
+              activeOpacity={0.6}
+              onPress={() => { setShowEnrollSheet(false); router.replace('/(auth)/dashboard'); }}
+            >
+              <Text style={s.sheetSecondaryText}>Not now</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -482,4 +590,57 @@ const styles = (colors: AppColors) =>
       fontWeight: '700',
       color: colors.text,
     },
+    bioButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      paddingVertical: 14,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.accent,
+      marginTop: 12,
+    },
+    bioButtonTextWrap: { alignItems: 'flex-start' },
+    bioButtonText: { color: colors.accent, fontSize: 15, fontWeight: '600' },
+    bioButtonSub: { color: colors.textMuted, fontSize: 12, fontWeight: '500', marginTop: 1 },
+    sheetBackdrop: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      justifyContent: 'center',
+      paddingHorizontal: 24,
+    },
+    sheetCard: {
+      backgroundColor: colors.card,
+      borderRadius: 20,
+      padding: 24,
+      alignItems: 'center',
+    },
+    sheetIconBox: {
+      width: 76,
+      height: 76,
+      borderRadius: 20,
+      backgroundColor: colors.accentTint,
+      borderWidth: 1,
+      borderColor: colors.accentBorder,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 18,
+    },
+    sheetTitle: { color: colors.text, fontSize: 19, fontWeight: '700', marginBottom: 8, textAlign: 'center' },
+    sheetBody: { color: colors.textMuted, fontSize: 14, lineHeight: 20, marginBottom: 22, textAlign: 'center' },
+    sheetPrimary: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      alignSelf: 'stretch',
+      backgroundColor: colors.accent,
+      paddingVertical: 14,
+      borderRadius: 12,
+      marginBottom: 8,
+    },
+    sheetPrimaryText: { color: '#fff', fontSize: 15, fontWeight: '600' },
+    sheetSecondary: { alignSelf: 'stretch', paddingVertical: 12, alignItems: 'center' },
+    sheetSecondaryText: { color: colors.textMuted, fontSize: 14, fontWeight: '500' },
   });

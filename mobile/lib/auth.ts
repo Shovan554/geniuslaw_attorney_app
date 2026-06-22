@@ -7,6 +7,10 @@ const REFRESH_KEY = 'gla_refresh_token';
 const TEMP_2FA_KEY = 'gla_temp_2fa_token';
 const USER_KEY = 'gla_user';
 
+const BIO_ENABLED_KEY = 'gla_biometric_enabled';
+const BIO_USER_KEY = 'gla_biometric_user';
+const BIO_REFRESH_KEY = 'gla_biometric_refresh';
+
 export type PublicUser = {
   id: number;
   email: string;
@@ -193,6 +197,66 @@ export async function getAttorneyId(): Promise<number | null> {
 export async function hasSession(): Promise<boolean> {
   const token = await SecureStore.getItemAsync(ACCESS_KEY);
   return !!token;
+}
+
+export async function isBiometricEnabled(): Promise<boolean> {
+  const v = await SecureStore.getItemAsync(BIO_ENABLED_KEY);
+  return v === 'true';
+}
+
+export async function getBiometricUser(): Promise<PublicUser | null> {
+  const raw = await SecureStore.getItemAsync(BIO_USER_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as PublicUser;
+  } catch {
+    return null;
+  }
+}
+
+/** Snapshot the current session's refresh token + user behind the biometric flag. */
+export async function enableBiometric(): Promise<boolean> {
+  const refresh = await SecureStore.getItemAsync(REFRESH_KEY);
+  const user = await SecureStore.getItemAsync(USER_KEY);
+  if (!refresh || !user) return false;
+  await SecureStore.setItemAsync(BIO_REFRESH_KEY, refresh);
+  await SecureStore.setItemAsync(BIO_USER_KEY, user);
+  await SecureStore.setItemAsync(BIO_ENABLED_KEY, 'true');
+  return true;
+}
+
+export async function disableBiometric(): Promise<void> {
+  await SecureStore.deleteItemAsync(BIO_ENABLED_KEY);
+  await SecureStore.deleteItemAsync(BIO_USER_KEY);
+  await SecureStore.deleteItemAsync(BIO_REFRESH_KEY);
+}
+
+/** Mint a fresh session from the biometric-stored refresh token. Caller gates with promptBiometric() first. */
+export async function biometricLogin(): Promise<AuthResult> {
+  const refresh = await SecureStore.getItemAsync(BIO_REFRESH_KEY);
+  const userRaw = await SecureStore.getItemAsync(BIO_USER_KEY);
+  if (!refresh || !userRaw) {
+    return { status: 'error', message: 'Face ID sign-in is not set up on this device.' };
+  }
+
+  const res = await postJson<{ access_token: string }>('/auth/refresh', { refresh_token: refresh });
+  if (!res.ok) {
+    await disableBiometric();
+    return { status: 'error', message: 'Your session expired. Please sign in with your password.' };
+  }
+
+  let user: PublicUser;
+  try {
+    user = JSON.parse(userRaw) as PublicUser;
+  } catch {
+    await disableBiometric();
+    return { status: 'error', message: 'Saved sign-in data was corrupted. Please sign in with your password.' };
+  }
+
+  await SecureStore.setItemAsync(ACCESS_KEY, res.data.access_token);
+  await SecureStore.setItemAsync(REFRESH_KEY, refresh);
+  await SecureStore.setItemAsync(USER_KEY, userRaw);
+  return { status: 'success', user, mustChangePassword: false };
 }
 
 export async function changePassword(

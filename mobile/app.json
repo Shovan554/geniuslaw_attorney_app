@@ -28,7 +28,8 @@
         "UIBackgroundModes": [
           "audio",
           "voip"
-        ]
+        ],
+        "NSFaceIDUsageDescription": "GeniusLaw Attorney uses Face ID to let you sign in quickly without your password."
       }
     },
     "android": {

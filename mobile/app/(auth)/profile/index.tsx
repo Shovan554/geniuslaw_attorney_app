@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
@@ -7,6 +7,7 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TouchableOpacity,
   View,
@@ -18,6 +19,8 @@ import { Card, CardRow } from '../../../components/Card';
 import { fonts, radius, spacing } from '../../../constants/theme';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { AttorneyProfile, getAttorneyMe, unenrollPronto } from '../../../lib/attorney';
+import { disableBiometric, enableBiometric, isBiometricEnabled } from '../../../lib/auth';
+import { getBiometricCapability, promptBiometric } from '../../../lib/biometric';
 
 export default function ProfileIndex() {
   const { colors } = useTheme();
@@ -27,6 +30,9 @@ export default function ProfileIndex() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [unenrolling, setUnenrolling] = useState(false);
+  const [bioAvailable, setBioAvailable] = useState(false);
+  const [bioLabel, setBioLabel] = useState('biometrics');
+  const [bioOn, setBioOn] = useState(false);
 
   const load = useCallback(async () => {
     const res = await getAttorneyMe();
@@ -45,6 +51,8 @@ export default function ProfileIndex() {
       load().finally(() => {
         if (!cancelled) setLoading(false);
       });
+      getBiometricCapability().then((cap) => { setBioAvailable(cap.available); setBioLabel(cap.label); });
+      isBiometricEnabled().then(setBioOn);
       return () => {
         cancelled = true;
       };
@@ -77,6 +85,18 @@ export default function ProfileIndex() {
       ],
     );
   }, []);
+
+  const toggleBiometric = async (next: boolean) => {
+    if (next) {
+      const ok = await promptBiometric(`Enable ${bioLabel} sign-in`);
+      if (!ok) return;
+      const enabled = await enableBiometric();
+      setBioOn(enabled);
+    } else {
+      await disableBiometric();
+      setBioOn(false);
+    }
+  };
 
   const initials =
     profile?.full_name
@@ -233,6 +253,22 @@ export default function ProfileIndex() {
                 </View>
               </Card>
             </Animated.View>
+
+            {bioAvailable && (
+              <Animated.View entering={FadeInLeft.duration(360).delay(330)}>
+                <Card style={styles.cardSpacing} padding="md">
+                  <View style={styles.actionRow}>
+                    <View style={[styles.iconWrap, { backgroundColor: colors.accentTint, borderColor: colors.accentBorder }]}>
+                      <MaterialCommunityIcons name={bioLabel === 'Face ID' ? 'face-recognition' : 'fingerprint'} size={18} color={colors.accent} />
+                    </View>
+                    <Text style={[styles.actionText, { color: colors.text, fontFamily: fonts.sansSemiBold }]}>
+                      Sign in with {bioLabel}
+                    </Text>
+                    <Switch value={bioOn} onValueChange={toggleBiometric} />
+                  </View>
+                </Card>
+              </Animated.View>
+            )}
 
             <Animated.View entering={FadeInLeft.duration(360).delay(360)}>
               <Card style={styles.cardSpacing} padding="md" onPress={() => router.push('/(auth)/profile/vault')}>
