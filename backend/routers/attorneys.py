@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import HTMLResponse
@@ -65,6 +66,23 @@ def _fetch_user_email(user_id: int) -> str | None:
     return rows[0]["email"] if rows else None
 
 
+def _touch_last_logged_in(user_id: int) -> None:
+    """Bump users.last_logged_in to now (best-effort).
+
+    Called when the app loads the authenticated profile via GET /attorneys/me
+    (dashboard mount on every open, including resuming a still-valid session or
+    a biometric login), so the timestamp tracks "last active session" rather than
+    only fresh credential logins. Wrapped in try/except: a tracking write must
+    never break the request it piggybacks on.
+    """
+    try:
+        sb = get_supabase()
+        now_iso = datetime.now(timezone.utc).isoformat()
+        sb.table("users").update({"last_logged_in": now_iso}).eq("id", user_id).execute()
+    except Exception as exc:
+        print(f"[attorneys] failed to update last_logged_in for user_id={user_id}: {exc!r}", flush=True)
+
+
 def _fetch_attorney_by_email(email: str) -> dict | None:
     sb = get_supabase()
     resp = (
@@ -111,6 +129,10 @@ def get_me(token: dict = Depends(require_attorney_role)) -> AttorneyProfile:
     attorney = _fetch_attorney_by_email(email)
     if not attorney:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attorney profile not found.")
+
+    # The app calls GET /attorneys/me on every authenticated open (dashboard
+    # mount), so this doubles as the "session is active" signal for last_logged_in.
+    _touch_last_logged_in(user_id)
 
     return _profile_from_row(attorney)
 
