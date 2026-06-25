@@ -1,1 +1,0 @@
-app/(auth)/calls/[id].tsx(330,13): error TS2322: Type 'RegisteredStyle<AbsoluteFillStyle>' is not assignable to type 'ViewStyle | undefined'.

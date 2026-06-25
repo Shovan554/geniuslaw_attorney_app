@@ -19,7 +19,7 @@
     <key>CFBundlePackageType</key>
     <string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.4.0</string>
+    <string>1.5.0</string>
     <key>CFBundleSignature</key>
     <string>????</string>
     <key>CFBundleURLTypes</key>
@@ -53,10 +53,10 @@
       <key>NSAllowsLocalNetworking</key>
       <true/>
     </dict>
-    <key>NSFaceIDUsageDescription</key>
-    <string>GeniusLaw Attorney uses Face ID to let you sign in quickly without your password.</string>
     <key>NSCameraUsageDescription</key>
     <string>GeniusLaw Attorney uses your camera for video calls with clients (optional, audio-only by default).</string>
+    <key>NSFaceIDUsageDescription</key>
+    <string>GeniusLaw Attorney uses Face ID to let you sign in quickly without your password.</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>GeniusLaw Attorney uses your microphone for in-app voice calls with clients.</string>
     <key>NSUserActivityTypes</key>

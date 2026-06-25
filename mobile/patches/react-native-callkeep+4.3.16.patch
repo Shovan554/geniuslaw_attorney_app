@@ -1,0 +1,28 @@
+diff --git a/node_modules/react-native-callkeep/android/src/main/java/io/wazo/callkeep/RNCallKeepModule.java b/node_modules/react-native-callkeep/android/src/main/java/io/wazo/callkeep/RNCallKeepModule.java
+index 025480a..a3d576a 100644
+--- a/node_modules/react-native-callkeep/android/src/main/java/io/wazo/callkeep/RNCallKeepModule.java
++++ b/node_modules/react-native-callkeep/android/src/main/java/io/wazo/callkeep/RNCallKeepModule.java
+@@ -434,7 +434,11 @@ public class RNCallKeepModule extends ReactContextBaseJavaModule implements Life
+         this.hasListeners = false;
+     }
+ 
+-    @ReactMethod
++    // NOTE: @ReactMethod removed from this 3-arg overload. The New Architecture's
++    // TurboModule interop requires each exported method name to be unique, and two
++    // @ReactMethod overloads named "displayIncomingCall" crash module init with a
++    // ParsingException. The JS side only calls the 4-arg overload on Android, so this
++    // stays as a plain Java helper (kept for any internal callers).
+     public void displayIncomingCall(String uuid, String number, String callerName) {
+         this.displayIncomingCall(uuid, number, callerName, false, null);
+     }
+@@ -483,7 +487,9 @@ public class RNCallKeepModule extends ReactContextBaseJavaModule implements Life
+         conn.onAnswer();
+     }
+ 
+-    @ReactMethod
++    // NOTE: @ReactMethod removed from this 3-arg overload (see displayIncomingCall above).
++    // Duplicate exported method names crash New Architecture TurboModule init; the JS side
++    // only calls the 4-arg startCall overload on Android.
+     public void startCall(String uuid, String number, String callerName) {
+         this.startCall(uuid, number, callerName, false, null);
+     }

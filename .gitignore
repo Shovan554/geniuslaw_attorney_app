@@ -76,3 +76,7 @@ Thumbs.db
 # ─── Misc ───────────────────────────────────────────────────
 coverage/
 *.tmp
+
+# Superpowers / SDD workflow artifacts (local only)
+.superpowers/
+docs/superpowers/
