@@ -425,11 +425,10 @@ export default function InCallScreen() {
         />
         <View style={styles.topScrim} />
 
-        <View style={styles.testBadge} pointerEvents="none">
-          <Text style={styles.testBadgeText}>TEST MODE</Text>
-        </View>
-
-        <View style={[styles.topInfo, styles.topInfoOverlay]}>
+        <View style={[styles.topInfo, styles.topInfoOverlay, styles.videoTestTopInfo]}>
+          <View style={styles.videoTestBadge} pointerEvents="none">
+            <Text style={styles.testBadgeText}>TEST MODE</Text>
+          </View>
           <Text
             style={[styles.calleeName, { color: '#FFFFFF', fontFamily: fonts.sansSemiBold }]}
             numberOfLines={1}
@@ -803,6 +802,17 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // Push the TEST MODE badge + client name + timer further down the video
+  // overlay, kept together as one stacked group.
+  videoTestTopInfo: {
+    paddingTop: spacing.xl * 5,
+  },
+  videoTestBadge: {
+    backgroundColor: 'rgba(201,168,76,0.92)',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.full,
   },
 
   controls: {
