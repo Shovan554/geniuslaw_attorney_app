@@ -5,9 +5,12 @@ import Daily, {
   DailyMediaView,
   DailyParticipant,
 } from '@daily-co/react-native-daily-js';
+import { useEvent, useEventListener } from 'expo';
+import { setAudioModeAsync } from 'expo-audio';
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, AppState, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { fonts, radius, spacing } from '../../../constants/theme';
 import { useTheme } from '../../../contexts/ThemeContext';
@@ -57,6 +60,7 @@ export default function InCallScreen() {
     video?: string;
     pronto?: string;
     test?: string;
+    videoUrl?: string;
   }>();
   const calleeName = params.name || 'Client';
   const callId = params.id;
@@ -65,6 +69,9 @@ export default function InCallScreen() {
   const isVideoCall = params.video === '1';
   const isPronto = params.pronto === '1';
   const isTest = params.test === '1';
+  const videoUrl = params.videoUrl;
+  // Test calls play a hosted AI video instead of joining Daily.
+  const isVideoTest = isTest && !!videoUrl;
 
   // Pronto wrap-up: after the attorney hangs up an answered Pronto call, the
   // backend tells us `requires_wrap_up: true`. We then block this screen on
@@ -143,6 +150,55 @@ export default function InCallScreen() {
     reportEndedRef.current = reportEnded;
   }, [reportEnded]);
 
+  // --- Test-call video playback (skips Daily entirely) ---
+  const player = useVideoPlayer(isVideoTest ? videoUrl! : null, (p) => {
+    p.loop = false;
+    p.muted = false;
+  });
+  const { status: videoStatus } = useEvent(player, 'statusChange', {
+    status: player.status,
+  });
+  useEventListener(player, 'playToEnd', () => {
+    reportEndedRef.current('test_video_ended');
+  });
+
+  // Play the hosted AI video with sound (even on silent), and reuse the same
+  // "connected + elapsed timer" chrome the solo Daily test path used.
+  useEffect(() => {
+    if (!isVideoTest) return;
+    setAudioModeAsync({ playsInSilentMode: true }).catch(() => {});
+    player.play();
+    connectedAtRef.current = Date.now();
+    setStatus('connected');
+    const t = setInterval(() => {
+      if (connectedAtRef.current) {
+        setElapsedSec(Math.floor((Date.now() - connectedAtRef.current) / 1000));
+      }
+    }, 1000);
+    elapsedTimerRef.current = t;
+    return () => clearInterval(t);
+  }, [isVideoTest, player]);
+
+  // Pause when backgrounded, resume on return.
+  useEffect(() => {
+    if (!isVideoTest) return;
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active') player.play();
+      else player.pause();
+    });
+    return () => sub.remove();
+  }, [isVideoTest, player]);
+
+  // Auto-end gracefully if the video fails to load.
+  useEffect(() => {
+    if (!isVideoTest) return;
+    if (videoStatus === 'error') {
+      Alert.alert('Test video unavailable', "Couldn't load the test video.", [
+        { text: 'OK', onPress: () => reportEndedRef.current('test_video_error') },
+      ]);
+    }
+  }, [isVideoTest, videoStatus]);
+
   const syncParticipants = useCallback((co: DailyCall) => {
     const ps = co.participants();
     setLocalParticipant(ps.local ?? null);
@@ -193,6 +249,7 @@ export default function InCallScreen() {
   }, [callId, status, reportEnded, isPronto, isTest]);
 
   useEffect(() => {
+    if (isVideoTest) return; // video test plays a local video; never join Daily
     if (!roomUrl || !meetingToken) {
       Alert.alert('Missing call info', 'No room URL or token provided.');
       router.back();
@@ -297,7 +354,7 @@ export default function InCallScreen() {
     // deliberately omit `reportEnded` from deps and call it via
     // `reportEndedRef.current(...)` instead — see comment above the ref.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roomUrl, meetingToken, isVideoCall, syncParticipants, isTest]);
+  }, [roomUrl, meetingToken, isVideoCall, syncParticipants, isTest, isVideoTest]);
 
   const handleMuteToggle = useCallback(() => {
     const co = callRef.current;
@@ -351,6 +408,60 @@ export default function InCallScreen() {
     remoteParticipant?.video !== false;
   const showLocalVideo =
     isVideoCall && localParticipant?.videoTrack && !cameraOff && !showSelfAsMain;
+
+  if (isVideoTest) {
+    return (
+      <SafeAreaView
+        edges={['top', 'bottom']}
+        style={[styles.container, { backgroundColor: '#000000' }]}
+      >
+        <VideoView
+          player={player}
+          style={StyleSheet.absoluteFill}
+          contentFit="cover"
+          nativeControls={false}
+          allowsFullscreen={false}
+          allowsPictureInPicture={false}
+        />
+        <View style={styles.topScrim} />
+
+        <View style={styles.testBadge} pointerEvents="none">
+          <Text style={styles.testBadgeText}>TEST MODE</Text>
+        </View>
+
+        <View style={[styles.topInfo, styles.topInfoOverlay]}>
+          <Text
+            style={[styles.calleeName, { color: '#FFFFFF', fontFamily: fonts.sansSemiBold }]}
+            numberOfLines={1}
+          >
+            {calleeName}
+          </Text>
+          <Text style={[styles.statusText, { color: '#A0F0C0', fontFamily: fonts.sansMedium }]}>
+            {formatElapsed(elapsedSec)}
+          </Text>
+        </View>
+
+        {videoStatus === 'loading' ? (
+          <View style={styles.videoLoading} pointerEvents="none">
+            <ActivityIndicator color="#FFFFFF" size="large" />
+          </View>
+        ) : null}
+
+        <View style={[styles.controls, styles.controlsOverlay]}>
+          <Pressable
+            onPress={handleEnd}
+            hitSlop={12}
+            style={({ pressed }) => [
+              styles.endBtn,
+              { backgroundColor: colors.danger, opacity: pressed ? 0.85 : 1 },
+            ]}
+          >
+            <Ionicons name="call" size={26} color="#FFFFFF" style={styles.endIcon} />
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView
@@ -687,6 +798,12 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   pipMedia: { width: '100%', height: '100%' },
+
+  videoLoading: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
   controls: {
     flexDirection: 'row',

@@ -9,6 +9,19 @@ import { startProntoTestCall } from './pronto';
 type TestCallInfo = { isVideo: boolean; clientName: string };
 const TEST_CALLS = new Map<string, TestCallInfo>();
 
+const DEFAULT_TEST_VIDEO_URL =
+  'https://geniuslaw-attorney-app.onrender.com/assets/pronto/demo.mp4';
+
+/**
+ * URL of the AI test-call video played when the attorney answers a test call.
+ * Defaults to the copy hosted on the attorney backend's static /assets mount;
+ * override at build time with EXPO_PUBLIC_PRONTO_TEST_VIDEO_URL (must be
+ * uploaded to the EAS env — see memory eas_env_vars_must_be_uploaded — if used).
+ */
+export function resolveTestVideoUrl(): string {
+  return process.env.EXPO_PUBLIC_PRONTO_TEST_VIDEO_URL || DEFAULT_TEST_VIDEO_URL;
+}
+
 export function markTestCall(callUUID: string, info: TestCallInfo): void {
   TEST_CALLS.set(callUUID, info);
 }
@@ -79,6 +92,7 @@ export async function handleTestCallAnswer(callUUID: string): Promise<void> {
       video: isVideo ? '1' : '0',
       pronto: '1',
       test: '1',
+      videoUrl: resolveTestVideoUrl(),
     },
   });
 }

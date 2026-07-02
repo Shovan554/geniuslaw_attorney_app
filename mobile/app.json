@@ -90,7 +90,9 @@
           "merchantIdentifier": "",
           "enableGooglePay": false
         }
-      ]
+      ],
+      "expo-video",
+      "expo-audio"
     ],
     "extra": {
       "router": {},
