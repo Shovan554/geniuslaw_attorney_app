@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { screenEdges } from '../../../lib/safeAreaEdges';
 import { SearchBar } from '../../../components/SearchBar';
 import { fonts, radius, spacing } from '../../../constants/theme';
 import { useTheme } from '../../../contexts/ThemeContext';
@@ -121,7 +122,7 @@ export default function NewCallScreen() {
 
   return (
     <SafeAreaView
-      edges={['top']}
+      edges={screenEdges}
       style={[styles.container, { backgroundColor: colors.background }]}
     >
       <View style={styles.header}>

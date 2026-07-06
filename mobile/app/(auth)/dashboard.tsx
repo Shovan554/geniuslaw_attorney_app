@@ -17,6 +17,7 @@ import Animated, {
   Layout,
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { screenEdges } from '../../lib/safeAreaEdges';
 import { AppHeader } from '../../components/AppHeader';
 import { fonts, radius, spacing } from '../../constants/theme';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -83,7 +84,7 @@ export default function DashboardScreen() {
 
   return (
     <SafeAreaView
-      edges={['top']}
+      edges={screenEdges}
       style={[styles.container, { backgroundColor: colors.background }]}
     >
       <AppHeader eyebrow="Welcome back" title={firstName ?? 'Counselor'} />

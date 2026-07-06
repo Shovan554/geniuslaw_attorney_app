@@ -10,8 +10,8 @@ import { setAudioModeAsync } from 'expo-audio';
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, AppState, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { ActivityIndicator, Alert, AppState, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fonts, radius, spacing } from '../../../constants/theme';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { endCall as endCallApi, getCallStatus } from '../../../lib/calls';
@@ -39,6 +39,12 @@ function formatElapsed(seconds: number): string {
 export default function InCallScreen() {
   const { colors } = useTheme();
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
+  // The call controls overlay is absolutely positioned (bottom: 0), which
+  // ignores SafeAreaView padding. Under Android edge-to-edge that puts the
+  // hang-up button behind the nav bar, so lift it by the bottom inset. iOS
+  // keeps bottom: 0 (unchanged).
+  const androidOverlayInset = Platform.OS === 'android' ? { bottom: insets.bottom } : null;
 
   // Block the swipe-right back gesture while in a call. The nested calls
   // stack already sets gestureEnabled:false for this screen, but this screen
@@ -159,6 +165,12 @@ export default function InCallScreen() {
     status: player.status,
   });
   useEventListener(player, 'playToEnd', () => {
+    // Guard on isVideoTest: on a REAL call the player still exists with a
+    // null source (useVideoPlayer is an unconditional hook), and expo-video
+    // emits playToEnd on that empty player right after mount. Without this
+    // guard it fired reportEnded('test_video_ended') ~1s after the attorney
+    // joined, ending the real call and tearing down the Daily room.
+    if (!isVideoTest) return;
     reportEndedRef.current('test_video_ended');
   });
 
@@ -446,7 +458,7 @@ export default function InCallScreen() {
           </View>
         ) : null}
 
-        <View style={[styles.controls, styles.controlsOverlay]}>
+        <View style={[styles.controls, styles.controlsOverlay, androidOverlayInset]}>
           <Pressable
             onPress={handleEnd}
             hitSlop={12}
@@ -586,6 +598,7 @@ export default function InCallScreen() {
         style={[
           styles.controls,
           isVideoCall && showRemoteVideo ? styles.controlsOverlay : null,
+          isVideoCall && showRemoteVideo ? androidOverlayInset : null,
         ]}
       >
         <Pressable

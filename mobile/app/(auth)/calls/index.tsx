@@ -5,13 +5,15 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Platform,
   Pressable,
   RefreshControl,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { screenEdges } from '../../../lib/safeAreaEdges';
 import { AppHeader } from '../../../components/AppHeader';
 import { fonts, radius, spacing } from '../../../constants/theme';
 import { useTheme } from '../../../contexts/ThemeContext';
@@ -227,7 +229,7 @@ export default function CallsScreen() {
   if (loading) {
     return (
       <SafeAreaView
-        edges={['top']}
+        edges={screenEdges}
         style={[styles.container, { backgroundColor: colors.background }]}
       >
         <AppHeader title="Calls" />
@@ -239,7 +241,7 @@ export default function CallsScreen() {
 
   return (
     <SafeAreaView
-      edges={['top']}
+      edges={screenEdges}
       style={[styles.container, { backgroundColor: colors.background }]}
     >
       <AppHeader title="Calls" />
@@ -389,11 +391,14 @@ function ItemSeparator() {
 
 function NewCallFab({ onPress }: { onPress: () => void }) {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
         styles.fab,
+        // Absolute FAB ignores SafeAreaView padding; lift above Android's nav bar. iOS unchanged.
+        Platform.OS === 'android' && { bottom: spacing.xl + insets.bottom },
         {
           backgroundColor: colors.accent,
           shadowColor: colors.cardShadow,

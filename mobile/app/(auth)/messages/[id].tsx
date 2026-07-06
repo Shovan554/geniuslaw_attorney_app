@@ -13,6 +13,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { screenEdges } from '../../../lib/safeAreaEdges';
 import { fonts, radius, spacing } from '../../../constants/theme';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { getUserId } from '../../../lib/auth';
@@ -229,7 +230,7 @@ export default function ConversationThreadScreen() {
 
   return (
     <SafeAreaView
-      edges={['top']}
+      edges={screenEdges}
       style={[styles.container, { backgroundColor: colors.background }]}
     >
       <View style={styles.header}>

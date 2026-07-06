@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import Animated, { Easing, FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { screenEdges } from '../../lib/safeAreaEdges';
 import { AppHeader } from '../../components/AppHeader';
 import {
   ProntoActionSheet,
@@ -251,7 +252,7 @@ export default function ProntoScreen() {
     : 'You are offline';
 
   return (
-    <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView edges={screenEdges} style={[styles.container, { backgroundColor: colors.background }]}>
       <AppHeader eyebrow="On-demand intake" title="Pronto!" onRefresh={onRefresh} refreshing={refreshing} />
       <ScrollView
         contentContainerStyle={styles.scroll}

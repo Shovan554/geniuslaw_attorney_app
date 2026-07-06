@@ -18,6 +18,7 @@ import Animated, {
   Layout,
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { screenEdges } from '../../../lib/safeAreaEdges';
 import { fonts, radius, spacing } from '../../../constants/theme';
 import { useTheme } from '../../../contexts/ThemeContext';
 import {
@@ -95,7 +96,7 @@ export default function CaseDetailScreen() {
   if (!valid) {
     return (
       <SafeAreaView
-        edges={['top']}
+        edges={screenEdges}
         style={[styles.container, { backgroundColor: colors.background }]}
       >
         <BackBar />
@@ -112,7 +113,7 @@ export default function CaseDetailScreen() {
 
   return (
     <SafeAreaView
-      edges={['top']}
+      edges={screenEdges}
       style={[styles.container, { backgroundColor: colors.background }]}
     >
       <BackBar />

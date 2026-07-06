@@ -17,7 +17,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -55,6 +55,7 @@ const shortName = (user: PublicUser | null): string => {
 export default function LoginScreen() {
   const router = useRouter();
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
 
   const { toast } = useLocalSearchParams<{ toast?: string }>();
   const [banner, setBanner] = useState<string | null>(null);
@@ -375,7 +376,14 @@ export default function LoginScreen() {
           </ScrollView>
         </KeyboardAvoidingView>
 
-        <View style={s.supportWrap}>
+        <View
+          style={[
+            s.supportWrap,
+            // Absolute elements ignore SafeAreaView padding, so lift the footer
+            // above Android's edge-to-edge nav bar. iOS unchanged.
+            Platform.OS === 'android' && { bottom: spacing.lg + insets.bottom },
+          ]}
+        >
           <Text style={s.supportText}>
             For support, please email{' '}
             <Text style={s.supportEmail}>dev@geniuslaw.com</Text>

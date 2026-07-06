@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { screenEdges } from '../../../lib/safeAreaEdges';
 import { AppHeader } from '../../../components/AppHeader';
 import { ProntoActivityItem } from '../../../components/ProntoActivityItem';
 import { SearchBar } from '../../../components/SearchBar';
@@ -110,7 +111,7 @@ export default function ProntoActivityListScreen() {
   }, [items, search, rangeFrom]);
 
   return (
-    <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView edges={screenEdges} style={[styles.container, { backgroundColor: colors.background }]}>
       <AppHeader
         eyebrow="Pronto"
         title="Recent Activity"

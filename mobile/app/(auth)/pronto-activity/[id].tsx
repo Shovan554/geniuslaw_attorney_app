@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { screenEdges } from '../../../lib/safeAreaEdges';
 import { AppHeader } from '../../../components/AppHeader';
 import { DocumentViewerModal } from '../../../components/DocumentViewerModal';
 import { fonts, radius, spacing } from '../../../constants/theme';
@@ -89,7 +90,7 @@ export default function ProntoActivityDetailScreen() {
   }, [detail, openingDoc]);
 
   return (
-    <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView edges={screenEdges} style={[styles.container, { backgroundColor: colors.background }]}>
       <AppHeader
         eyebrow="Recent activity"
         title={detail?.practice_area_name || 'Consultation'}

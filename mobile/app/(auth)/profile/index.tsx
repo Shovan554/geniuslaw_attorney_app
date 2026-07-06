@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import Animated, { FadeInDown, FadeInLeft } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { screenEdges } from '../../../lib/safeAreaEdges';
 import { AppHeader } from '../../../components/AppHeader';
 import { Card, CardRow } from '../../../components/Card';
 import { fonts, radius, spacing } from '../../../constants/theme';
@@ -107,7 +108,7 @@ export default function ProfileIndex() {
       .join('') ?? '';
 
   return (
-    <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView edges={screenEdges} style={[styles.container, { backgroundColor: colors.background }]}>
       <AppHeader title="Profile" />
       <ScrollView
         contentContainerStyle={styles.content}

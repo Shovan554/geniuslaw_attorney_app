@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Platform } from 'react-native';
 
 const CURRENT_VERSION = process.env.EXPO_PUBLIC_APP_VERSION ?? '';
 const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? '').trim();
@@ -20,7 +21,7 @@ export function useAppVersion() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`${API_URL}/app/version`);
+        const res = await fetch(`${API_URL}/app/version?platform=${Platform.OS}`);
         if (!res.ok) throw new Error('version fetch failed');
         const data: { version: string } = await res.json();
         if (cancelled) return;

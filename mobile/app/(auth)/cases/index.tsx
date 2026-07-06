@@ -16,6 +16,7 @@ import Animated, {
   FadeInUp,
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { screenEdges } from '../../../lib/safeAreaEdges';
 import { AppHeader } from '../../../components/AppHeader';
 import { SearchBar } from '../../../components/SearchBar';
 import { fonts, radius, spacing } from '../../../constants/theme';
@@ -287,7 +288,7 @@ export default function CasesListScreen() {
   if (loading && cases.length === 0) {
     return (
       <SafeAreaView
-        edges={['top']}
+        edges={screenEdges}
         style={[styles.container, { backgroundColor: colors.background }]}
       >
         <AppHeader title="Cases" />
@@ -298,7 +299,7 @@ export default function CasesListScreen() {
 
   return (
     <SafeAreaView
-      edges={['top']}
+      edges={screenEdges}
       style={[styles.container, { backgroundColor: colors.background }]}
     >
       <AppHeader title="Cases" />

@@ -14,7 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -33,6 +33,7 @@ type Step = 'email' | 'otp' | 'password';
 export default function ForgotPasswordScreen() {
   const router = useRouter();
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
 
   const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState('');
@@ -335,7 +336,14 @@ export default function ForgotPasswordScreen() {
           </ScrollView>
         </KeyboardAvoidingView>
 
-        <View style={s.supportWrap}>
+        <View
+          style={[
+            s.supportWrap,
+            // Absolute elements ignore SafeAreaView padding, so lift the footer
+            // above Android's edge-to-edge nav bar. iOS unchanged.
+            Platform.OS === 'android' && { bottom: spacing.lg + insets.bottom },
+          ]}
+        >
           <Text style={s.supportText}>
             For support, please email{' '}
             <Text style={s.supportEmail}>dev@geniuslaw.com</Text>

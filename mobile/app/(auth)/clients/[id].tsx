@@ -19,6 +19,7 @@ import Animated, {
   Layout,
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { screenEdges } from '../../../lib/safeAreaEdges';
 import { fonts, radius, spacing } from '../../../constants/theme';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { CaseSummary, getCases } from '../../../lib/cases';
@@ -97,7 +98,7 @@ export default function ClientDetailScreen() {
   if (!valid) {
     return (
       <SafeAreaView
-        edges={['top']}
+        edges={screenEdges}
         style={[styles.container, { backgroundColor: colors.background }]}
       >
         <BackBar />
@@ -114,7 +115,7 @@ export default function ClientDetailScreen() {
 
   return (
     <SafeAreaView
-      edges={['top']}
+      edges={screenEdges}
       style={[styles.container, { backgroundColor: colors.background }]}
     >
       <BackBar />

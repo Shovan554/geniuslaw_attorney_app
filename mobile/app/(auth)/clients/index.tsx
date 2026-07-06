@@ -16,6 +16,7 @@ import Animated, {
   FadeInUp,
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { screenEdges } from '../../../lib/safeAreaEdges';
 import { AppHeader } from '../../../components/AppHeader';
 import { SearchBar } from '../../../components/SearchBar';
 import { fonts, radius, spacing } from '../../../constants/theme';
@@ -288,7 +289,7 @@ export default function ClientsScreen() {
   if (loading && clients.length === 0) {
     return (
       <SafeAreaView
-        edges={['top']}
+        edges={screenEdges}
         style={[styles.container, { backgroundColor: colors.background }]}
       >
         <AppHeader title="My Clients" />
@@ -299,7 +300,7 @@ export default function ClientsScreen() {
 
   return (
     <SafeAreaView
-      edges={['top']}
+      edges={screenEdges}
       style={[styles.container, { backgroundColor: colors.background }]}
     >
       <AppHeader title="My Clients" />

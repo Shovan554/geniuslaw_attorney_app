@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { screenEdges } from '../../lib/safeAreaEdges';
 import { PracticeAreaPicker } from '../../components/PracticeAreaPicker';
 import { fonts, radius, spacing } from '../../constants/theme';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -361,7 +362,7 @@ export default function ProntoOnboardingScreen() {
     working || hero.busy || (step === 'practices' && selectedPractices.size === 0);
 
   return (
-    <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView edges={screenEdges} style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={12}>
