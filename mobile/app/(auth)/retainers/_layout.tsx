@@ -1,6 +1,6 @@
 import { Stack } from 'expo-router';
 
-export default function CasesLayout() {
+export default function RetainersLayout() {
   return (
     <Stack
       screenOptions={{
@@ -10,9 +10,7 @@ export default function CasesLayout() {
       }}
     >
       <Stack.Screen name="index" />
-      <Stack.Screen name="[id]/index" />
-      <Stack.Screen name="[id]/orders/[orderId]/index" />
-      <Stack.Screen name="[id]/orders/[orderId]/casecheck" />
+      <Stack.Screen name="[id]" />
     </Stack>
   );
 }

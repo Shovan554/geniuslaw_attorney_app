@@ -17,6 +17,8 @@ from routers import calls as calls_router
 from routers import cases as cases_router
 from routers import clients as clients_router
 from routers import messages as messages_router
+from routers import orders as orders_router
+from routers import retainers as retainers_router
 
 logging.basicConfig(level=logging.INFO)
 
@@ -47,3 +49,5 @@ app.include_router(cases_router.router)
 app.include_router(clients_router.router)
 app.include_router(messages_router.router)
 app.include_router(calls_router.router)
+app.include_router(orders_router.router)
+app.include_router(retainers_router.router)

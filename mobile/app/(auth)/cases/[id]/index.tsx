@@ -18,16 +18,16 @@ import Animated, {
   Layout,
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { screenEdges } from '../../../lib/safeAreaEdges';
-import { fonts, radius, spacing } from '../../../constants/theme';
-import { useTheme } from '../../../contexts/ThemeContext';
+import { screenEdges } from '../../../../lib/safeAreaEdges';
+import { fonts, radius, spacing } from '../../../../constants/theme';
+import { useTheme } from '../../../../contexts/ThemeContext';
 import {
   CaseSummary,
   OrderSummary,
   getCaseById,
   getOrdersByCaseId,
-} from '../../../lib/cases';
-import { caseStatusMeta, formatOrderTitle, orderStatusMeta } from '../../../lib/orderStatus';
+} from '../../../../lib/cases';
+import { caseStatusMeta, formatOrderTitle, orderStatusMeta } from '../../../../lib/orderStatus';
 
 function formatDate(iso: string | null): string {
   if (!iso) return '—';
@@ -214,7 +214,7 @@ export default function CaseDetailScreen() {
                       .easing(Easing.out(Easing.cubic))}
                     layout={Layout.springify()}
                   >
-                    <OrderCard item={o} />
+                    <OrderCard item={o} caseId={numericId} />
                   </Animated.View>
                 ))}
               </View>
@@ -394,18 +394,22 @@ function Divider() {
   return <View style={[styles.divider, { backgroundColor: colors.cardBorder }]} />;
 }
 
-function OrderCard({ item }: { item: OrderSummary }) {
+function OrderCard({ item, caseId }: { item: OrderSummary; caseId: number }) {
   const { colors } = useTheme();
   const meta = orderStatusMeta(item.status, colors);
   return (
-    <View
-      style={[
+    <Pressable
+      onPress={() =>
+        router.push(`/(auth)/cases/${caseId}/orders/${item.id}` as never)
+      }
+      style={({ pressed }) => [
         styles.orderCard,
         {
           backgroundColor: colors.card,
           borderColor: colors.cardBorder,
           shadowColor: colors.cardShadow,
         },
+        pressed && { opacity: 0.75, transform: [{ scale: 0.99 }] },
       ]}
     >
       <View style={styles.orderHeader}>
@@ -433,14 +437,11 @@ function OrderCard({ item }: { item: OrderSummary }) {
         {item.current_step_label?.trim() ||
           (item.current_step ? item.current_step.replace(/_/g, ' ') : 'Awaiting first step')}
       </Text>
-      <View style={styles.orderMetaRow}>
-        {item.state ? (
-          <OrderMeta icon="location-outline" label={item.state} />
-        ) : null}
-        {item.due_date ? (
+      {item.due_date ? (
+        <View style={styles.orderMetaRow}>
           <OrderMeta icon="calendar-outline" label={`Due ${formatDate(item.due_date)}`} />
-        ) : null}
-      </View>
+        </View>
+      ) : null}
       <View style={[styles.orderFooter, { borderTopColor: colors.cardBorder }]}>
         <Text
           style={[
@@ -450,8 +451,19 @@ function OrderCard({ item }: { item: OrderSummary }) {
         >
           {item.order_date ? `Ordered ${formatDate(item.order_date)}` : 'Order date pending'}
         </Text>
+        <View style={styles.footerCta}>
+          <Text
+            style={[
+              styles.footerText,
+              { color: colors.accent, fontFamily: fonts.sansSemiBold },
+            ]}
+          >
+            Details
+          </Text>
+          <Ionicons name="chevron-forward" size={13} color={colors.accent} />
+        </View>
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -612,9 +624,17 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   orderFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     borderTopWidth: StyleSheet.hairlineWidth,
     paddingTop: spacing.sm,
     marginTop: spacing.xs,
+  },
+  footerCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
   },
   footerText: {
     fontSize: 12,

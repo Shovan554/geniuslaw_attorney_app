@@ -2,9 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from middleware.auth_middleware import require_attorney_id
 from models.case import CaseListResponse, CaseSummary
-from models.order import OrderListResponse
+from models.order import OrderDetail, OrderListResponse
 from services.cases_service import get_case_for_attorney, list_cases_for_attorney
-from services.orders_service import list_orders_for_case_attorney
+from services.orders_service import (
+    get_order_for_case_attorney,
+    list_orders_for_case_attorney,
+)
 
 router = APIRouter(prefix="/cases", tags=["cases"])
 
@@ -43,3 +46,12 @@ def list_orders(
 ) -> OrderListResponse:
     orders = list_orders_for_case_attorney(case_id, attorney_id)
     return OrderListResponse(orders=orders)
+
+
+@router.get("/{case_id}/orders/{order_id}", response_model=OrderDetail)
+def get_order(
+    case_id: int,
+    order_id: int,
+    attorney_id: int = Depends(require_attorney_id),
+) -> OrderDetail:
+    return get_order_for_case_attorney(case_id, order_id, attorney_id)

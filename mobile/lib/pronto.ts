@@ -54,7 +54,7 @@ export type RetainerUpdate = {
   active?: boolean;
 };
 
-type Result<T> = { ok: true; data: T } | { ok: false; message: string };
+export type Result<T> = { ok: true; data: T } | { ok: false; message: string };
 
 async function prontoFetch(path: string, init: RequestInit = {}): Promise<Response | null> {
   if (!PRONTO_API_URL) {
@@ -78,7 +78,7 @@ async function prontoFetch(path: string, init: RequestInit = {}): Promise<Respon
   return res;
 }
 
-async function request<T>(
+export async function request<T>(
   method: 'GET' | 'PATCH' | 'POST',
   path: string,
   body?: unknown,

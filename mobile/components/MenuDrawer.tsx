@@ -34,7 +34,7 @@ type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 type NavItem = {
   label: string;
   icon: IoniconsName;
-  path: '/(auth)/dashboard' | '/(auth)/pronto' | '/(auth)/cases' | '/(auth)/clients' | '/(auth)/messages' | '/(auth)/calls' | '/(auth)/profile';
+  path: '/(auth)/dashboard' | '/(auth)/pronto' | '/(auth)/cases' | '/(auth)/clients' | '/(auth)/retainers' | '/(auth)/messages' | '/(auth)/calls' | '/(auth)/profile';
   match: string;
 };
 
@@ -43,6 +43,7 @@ const NAV: NavItem[] = [
   { label: 'Pronto!', icon: 'flash-outline', path: '/(auth)/pronto', match: '/pronto' },
   { label: 'Cases', icon: 'briefcase-outline', path: '/(auth)/cases', match: '/cases' },
   { label: 'My Clients', icon: 'people-outline', path: '/(auth)/clients', match: '/clients' },
+  { label: 'Retainer Agreements', icon: 'document-text-outline', path: '/(auth)/retainers', match: '/retainers' },
   { label: 'Messages', icon: 'chatbubbles-outline', path: '/(auth)/messages', match: '/messages' },
   { label: 'Calls', icon: 'call-outline', path: '/(auth)/calls', match: '/calls' },
 ];
