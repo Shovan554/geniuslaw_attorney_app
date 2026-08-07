@@ -4,19 +4,30 @@ import { Platform } from 'react-native';
 import type { Router } from 'expo-router';
 import type * as NotificationsType from 'expo-notifications';
 
+import { resolveCtaRoutes } from './alertRouting';
+import { ctaForLink, routeForGenre } from './alerts';
 import { refreshAccessToken } from './auth';
 
 const PRONTO_API_URL = process.env.EXPO_PUBLIC_PRONTO_API_URL;
 const ACCESS_KEY = 'gla_access_token';
 const DEVICE_ID_KEY = 'gla_device_id';
 
-export type NotificationLinkType = 'signing' | 'payment' | 'call';
+/**
+ * Plain string, NOT a union: the push payload mirrors the notification row's
+ * link_type verbatim, and the portal inserts types this build has never seen.
+ */
+export type NotificationLinkType = string;
 
 export type NotificationData = {
   notification_id?: number;
   genre?: string;
   link_type?: NotificationLinkType | null;
   link_id?: number | null;
+  /**
+   * Set for link types keyed by uuid rather than a serial id — currently only
+   * retainer agreements ("RA"), where it holds retainer_history.id.
+   */
+  link_uuid?: string | null;
 };
 
 // expo-notifications is a native module. If the dev client was built before
@@ -165,15 +176,36 @@ export async function registerForPushNotifications(): Promise<boolean> {
   return ok;
 }
 
-export function routeFromNotificationData(router: Router, _data: NotificationData): void {
-  // Test-call demo notifications open the dedicated test screen.
-  if (_data.genre === 'pronto_test') {
-    router.push('/(auth)/pronto-test' as never);
+export async function routeFromNotificationData(
+  router: Router,
+  data: NotificationData,
+): Promise<void> {
+  // The one genre that outranks link_type: the backend documents genre as the
+  // routing contract for test runs, so honor it even if link_type drifts.
+  if (data.genre === 'pronto_test') {
+    router.push(routeForGenre('pronto_test') as never);
     return;
   }
-  // v1: every other Pronto notification routes to the Pronto tab. Sub-routing
-  // (e.g. signing → /signings/:id) can be added when more genres land.
-  router.push('/(auth)/pronto' as never);
+
+  // link_id-level routing first — same table the in-app alert modal's CTA
+  // uses, so tapping a push lands exactly where "View case" would. One
+  // mapping, not two.
+  const cta = ctaForLink(
+    data.link_type ?? null,
+    data.link_id ?? null,
+    data.link_uuid ?? null,
+  );
+  if (cta) {
+    // Order and CaseCheck CTAs need a case lookup before they can name a
+    // route; every other CTA resolves without touching the network.
+    const routes = await resolveCtaRoutes(cta, data.genre ?? null);
+    for (const route of routes) router.push(route as never);
+    return;
+  }
+
+  // No usable link_type: fall back to the genre's own section rather than
+  // dumping a case alert on the Pronto tab.
+  router.push(routeForGenre(data.genre ?? null) as never);
 }
 
 type Subscription = { remove: () => void };
@@ -192,7 +224,7 @@ export function attachTapListener(router: Router): Subscription {
     if (handled.has(id)) return;
     handled.add(id);
     const data = (response.notification.request.content.data ?? {}) as NotificationData;
-    routeFromNotificationData(router, data);
+    void routeFromNotificationData(router, data);
   };
 
   // Cold-start: app was launched by tapping a notification. The listener
@@ -205,4 +237,15 @@ export function attachTapListener(router: Router): Subscription {
     .catch(() => {});
 
   return N.addNotificationResponseReceivedListener(handle);
+}
+
+/**
+ * Fires whenever a push is *delivered* while the app is running, tapped or not.
+ * The alerts poll runs every 30s; this closes that window so the bell badge
+ * updates the moment a notification lands. No-op without the native module.
+ */
+export function attachReceivedListener(onReceived: () => void): Subscription {
+  const N = loadNotifications();
+  if (!N) return { remove: () => {} };
+  return N.addNotificationReceivedListener(() => onReceived());
 }

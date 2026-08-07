@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { fonts, spacing } from '../constants/theme';
+import { AlertsBell } from './AlertsBell';
 import { MenuDrawer } from './MenuDrawer';
 
 type Props = {
@@ -65,6 +66,7 @@ export function AppHeader({ title, eyebrow, onBack, onRefresh, refreshing }: Pro
               )}
             </TouchableOpacity>
           ) : null}
+          <AlertsBell />
           <TouchableOpacity
             onPress={() => setOpen(true)}
             style={styles.iconBtn}

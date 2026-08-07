@@ -30,6 +30,37 @@ export type OrderSummary = {
   paid_amount: number;
 };
 
+export type StepState = 'complete' | 'current' | 'pending';
+
+export type StepItem = {
+  key: string;
+  label: string;
+  state: StepState;
+};
+
+export type StepGroup = {
+  roman: string;
+  key: string;
+  label: string;
+  state: StepState;
+  completed_count: number;
+  total_count: number;
+  steps: StepItem[];
+};
+
+export type OrderDetail = OrderSummary & {
+  case_id: number;
+  service_fee: number;
+  sell_date: string | null;
+  case_type: string | null;
+  groups: StepGroup[];
+  /** Raw `orders.history` rows — normalize with `lib/orderHistory.ts` before rendering. */
+  history: unknown[];
+  /** Raw CaseCheck payloads — normalize with `lib/casecheck.ts` before rendering. */
+  casecheck_identity_details: unknown[];
+  casecheck_updates: unknown[];
+};
+
 type Result<T> = { ok: true; data: T } | { ok: false; message: string };
 
 async function request<T>(path: string): Promise<Result<T>> {
@@ -78,4 +109,19 @@ export async function getOrdersByCaseId(
   id: number,
 ): Promise<Result<{ orders: OrderSummary[] }>> {
   return request<{ orders: OrderSummary[] }>(`/cases/${id}/orders`);
+}
+
+export async function getOrderDetail(
+  caseId: number,
+  orderId: number,
+): Promise<Result<OrderDetail>> {
+  return request<OrderDetail>(`/cases/${caseId}/orders/${orderId}`);
+}
+
+/**
+ * Order lookup by id alone. Alerts carry only the order id, so the case has
+ * to come back from the server before the nested order screen can be opened.
+ */
+export async function getOrderById(orderId: number): Promise<Result<OrderDetail>> {
+  return request<OrderDetail>(`/orders/${orderId}`);
 }

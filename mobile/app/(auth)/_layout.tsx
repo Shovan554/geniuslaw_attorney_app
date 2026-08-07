@@ -7,6 +7,7 @@ import {
   Manrope_600SemiBold,
   Manrope_700Bold,
 } from '@expo-google-fonts/manrope';
+import { AlertsProvider } from '../../contexts/AlertsContext';
 import { getStoredUser, hasSession } from '../../lib/auth';
 import { initCallKit } from '../../lib/callKit';
 import { attachTapListener, registerForPushNotifications } from '../../lib/notifications';
@@ -43,19 +44,23 @@ export default function AuthLayout() {
   if (!authed) return <Redirect href="/login" />;
 
   return (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-        animation: 'slide_from_right',
-        animationDuration: 450,
-      }}
-    >
-      <Stack.Screen name="dashboard" />
-      <Stack.Screen name="pronto" />
-      <Stack.Screen name="cases" />
-      <Stack.Screen name="clients" />
-      <Stack.Screen name="messages" />
-      <Stack.Screen name="profile" />
-    </Stack>
+    <AlertsProvider>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          animation: 'slide_from_right',
+          animationDuration: 450,
+        }}
+      >
+        <Stack.Screen name="dashboard" />
+        <Stack.Screen name="pronto" />
+        <Stack.Screen name="alerts" />
+        <Stack.Screen name="cases" />
+        <Stack.Screen name="clients" />
+        <Stack.Screen name="retainers" />
+        <Stack.Screen name="messages" />
+        <Stack.Screen name="profile" />
+      </Stack>
+    </AlertsProvider>
   );
 }
