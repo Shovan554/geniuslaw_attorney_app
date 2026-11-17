@@ -23,6 +23,8 @@ const GENRE_ICON: Record<string, IoniconName> = {
   retainer: 'document-text-outline',
   // Retainer *agreements* — the portal writes this one uppercase ("RA").
   ra: 'document-text-outline',
+  // Client activity: a message (from the client app or portal) or an upload.
+  client: 'chatbubble-ellipses-outline',
 };
 
 /**
@@ -46,6 +48,8 @@ export type Cta = {
   orderId?: number;
   /** Screen to open on top of that order, e.g. 'casecheck'. */
   orderSubroute?: string;
+  /** Client whose conversation must be looked up before routing. */
+  clientId?: number;
 };
 
 /**
@@ -86,6 +90,16 @@ const LINK_CTA: Record<
     // pronto-activity/[id] cannot render without an id.
     route: id == null ? '/(auth)/pronto' : `/(auth)/pronto-activity/${id}`,
   }),
+  // Client messages carry the client's id (conversation ids are uuids and
+  // link_id is an integer column) — resolveCtaRoutes finds the thread.
+  messages: (id) =>
+    id == null
+      ? { label: 'View messages', route: '/(auth)/messages' }
+      : { label: 'View message', route: null, clientId: id },
+  documents: (id) => ({
+    label: id == null ? 'View clients' : 'View client',
+    route: id == null ? '/(auth)/clients' : `/(auth)/clients/${id}`,
+  }),
   call: () => ({ label: 'Go to Pronto', route: '/(auth)/pronto' }),
   signing: () => ({ label: 'View signing', route: '/(auth)/pronto' }),
   payment: () => ({ label: 'View payments', route: '/(auth)/pronto-transactions' }),
@@ -116,6 +130,7 @@ const GENRE_ROUTE: Record<string, string> = {
   retainer: '/(auth)/pronto',
   // Retainer agreements have a list screen of their own to land on.
   ra: '/(auth)/retainers',
+  client: '/(auth)/messages',
 };
 
 /**

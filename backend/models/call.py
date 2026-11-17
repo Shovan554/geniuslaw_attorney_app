@@ -71,6 +71,7 @@ class AcceptCallResponse(BaseModel):
     daily_room_url: str
     daily_meeting_token: str
     is_video: bool
+    caller_name: Optional[str] = None
 
 
 class EndCallRequest(BaseModel):

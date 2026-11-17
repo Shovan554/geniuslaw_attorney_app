@@ -52,9 +52,10 @@ export type AcceptCallResponse = {
   daily_room_url: string;
   daily_meeting_token: string;
   is_video: boolean;
+  caller_name?: string | null;
 };
 
-type Result<T> = { ok: true; data: T } | { ok: false; message: string };
+type Result<T> = { ok: true; data: T } | { ok: false; message: string; status?: number };
 
 async function request<T>(path: string, init?: RequestInit): Promise<Result<T>> {
   try {
@@ -69,7 +70,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<Result<T>> 
           : Array.isArray(detail) && detail[0]?.msg
             ? detail[0].msg
             : `Request failed (${res.status})`;
-      return { ok: false, message };
+      return { ok: false, message, status: res.status };
     }
     return { ok: true, data: json as T };
   } catch (err) {

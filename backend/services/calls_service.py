@@ -416,7 +416,10 @@ def accept_call_for_user(call_id: str, user_id: int) -> AcceptCallResponse:
     sb = get_supabase()
     resp = (
         sb.table("calls")
-        .select("id, callee_user_id, daily_room_name, daily_room_url, status, is_video")
+        .select(
+            "id, caller_user_id, callee_user_id, daily_room_name, daily_room_url, "
+            "status, is_video"
+        )
         .eq("id", call_id)
         .limit(1)
         .execute()
@@ -427,6 +430,10 @@ def accept_call_for_user(call_id: str, user_id: int) -> AcceptCallResponse:
     call = rows[0]
     if int(call["callee_user_id"]) != user_id:
         raise HTTPException(status_code=403, detail="Not the callee for this call.")
+    # The client may have hung up (or the ring timed out) while CallKit was
+    # still showing; don't resurrect it — its Daily room is already gone.
+    if call.get("status") in _TERMINAL_CALL_STATUSES:
+        raise HTTPException(status_code=409, detail="This call has already ended.")
     if not call.get("daily_room_name"):
         raise HTTPException(status_code=500, detail="Call has no Daily room.")
 
@@ -438,11 +445,16 @@ def accept_call_for_user(call_id: str, user_id: int) -> AcceptCallResponse:
         "answered_at": datetime.now(timezone.utc).isoformat(),
     }).eq("id", call_id).execute()
 
+    caller_name: Optional[str] = None
+    if call.get("caller_user_id") is not None:
+        caller_name = _display_name_for_user(int(call["caller_user_id"]))
+
     return AcceptCallResponse(
         call_id=call_id,
         daily_room_url=call["daily_room_url"],
         daily_meeting_token=token,
         is_video=bool(call.get("is_video")),
+        caller_name=caller_name,
     )
 
 
