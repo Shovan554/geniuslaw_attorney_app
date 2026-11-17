@@ -13,6 +13,7 @@ describe('iconForGenre', () => {
     expect(iconForGenre('cases')).toBe('briefcase-outline');
     expect(iconForGenre('orders')).toBe('receipt-outline');
     expect(iconForGenre('casecheck')).toBe('shield-checkmark-outline');
+    expect(iconForGenre('client')).toBe('chatbubble-ellipses-outline');
   });
 
   // Retainer-agreement alerts arrive with an uppercase genre, unlike every
@@ -31,6 +32,17 @@ describe('iconForGenre', () => {
 });
 
 describe('ctaForLink', () => {
+  // The id on a message alert is the client's; the route needs a lookup.
+  it('builds a message CTA that resolves the client conversation', () => {
+    expect(ctaForLink('messages', 7)).toEqual({ label: 'View message', route: null, clientId: 7 });
+    expect(ctaForLink('messages', null)).toEqual({ label: 'View messages', route: '/(auth)/messages' });
+  });
+
+  it('routes a client document alert to that client', () => {
+    expect(ctaForLink('documents', 7)).toEqual({ label: 'View client', route: '/(auth)/clients/7' });
+    expect(ctaForLink('documents', null)).toEqual({ label: 'View clients', route: '/(auth)/clients' });
+  });
+
   // Retainer agreements are keyed by uuid: link_id is always null and
   // link_uuid holds retainer_history.id.
   it('routes a retainer-agreement alert straight to that retainer', () => {

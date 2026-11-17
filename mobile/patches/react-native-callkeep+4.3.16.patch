@@ -1,5 +1,5 @@
 diff --git a/node_modules/react-native-callkeep/android/src/main/java/io/wazo/callkeep/RNCallKeepModule.java b/node_modules/react-native-callkeep/android/src/main/java/io/wazo/callkeep/RNCallKeepModule.java
-index 025480a..a3d576a 100644
+index 025480a..13ca15b 100644
 --- a/node_modules/react-native-callkeep/android/src/main/java/io/wazo/callkeep/RNCallKeepModule.java
 +++ b/node_modules/react-native-callkeep/android/src/main/java/io/wazo/callkeep/RNCallKeepModule.java
 @@ -434,7 +434,11 @@ public class RNCallKeepModule extends ReactContextBaseJavaModule implements Life
@@ -26,3 +26,34 @@ index 025480a..a3d576a 100644
      public void startCall(String uuid, String number, String callerName) {
          this.startCall(uuid, number, callerName, false, null);
      }
+@@ -1030,8 +1036,15 @@ public class RNCallKeepModule extends ReactContextBaseJavaModule implements Life
+                 return;
+             }
+ 
+-            context.startActivity(intent);
+-            return;
++            // Newer Samsung One UI builds removed EnableAccountPreferenceActivity;
++            // starting it throws ActivityNotFoundException and crashes the app.
++            // Fall back to the generic phone-account settings screen instead.
++            try {
++                context.startActivity(intent);
++                return;
++            } catch (Exception e) {
++                Log.w(TAG, "[RNCallKeepModule][openPhoneAccounts] Samsung/OnePlus activity unavailable, falling back", e);
++            }
+         }
+ 
+         openPhoneAccountSettings();
+@@ -1052,7 +1065,11 @@ public class RNCallKeepModule extends ReactContextBaseJavaModule implements Life
+             Log.w(TAG, "[RNCallKeepModule][openPhoneAccountSettings] no react context found.");
+             return;
+         }
+-        context.startActivity(intent);
++        try {
++            context.startActivity(intent);
++        } catch (Exception e) {
++            Log.w(TAG, "[RNCallKeepModule][openPhoneAccountSettings] ACTION_CHANGE_PHONE_ACCOUNTS unavailable", e);
++        }
+     }
+ 
+     public static Boolean isConnectionServiceAvailable() {

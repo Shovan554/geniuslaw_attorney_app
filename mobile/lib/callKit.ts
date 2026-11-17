@@ -1,12 +1,8 @@
 import { router } from 'expo-router';
 import { Alert, NativeModules, Platform } from 'react-native';
 
-import {
-  acceptProntoCall,
-  endProntoCall,
-  registerProntoFcmToken,
-  registerProntoVoipToken,
-} from './pronto';
+import { acceptIncomingCall, declineIncomingCall } from './incomingCallRouting';
+import { registerProntoFcmToken, registerProntoVoipToken } from './pronto';
 import { clearTestCall, handleTestCallAnswer, isTestCall } from './testCall';
 
 const APP_NAME = 'GeniusLaw Attorney';
@@ -23,8 +19,9 @@ let initialised = false;
  * polling (the existing /attorney/pronto/calls/active list) until a
  * proper dev client is installed.
  *
- * Acceptance routes to /(auth)/calls/[id]?pronto=1 — the existing
- * Daily call screen the in-app Join Call card already uses.
+ * Acceptance routes to /(auth)/calls/[id] — the existing Daily call
+ * screen. Incoming calls come from either a GeniusLaw client (attorney
+ * backend) or Pronto (`pronto=1`); see lib/incomingCallRouting.
  */
 export async function initCallKit(_userId: number): Promise<void> {
   if (initialised) return;
@@ -97,19 +94,10 @@ export async function initCallKit(_userId: number): Promise<void> {
       return;
     }
     try {
-      const res = await acceptProntoCall(callUUID);
+      // GeniusLaw client call or Pronto call — resolved by call id.
+      const res = await acceptIncomingCall(callUUID);
       if (!res.ok) throw new Error(res.message);
-      router.push({
-        pathname: '/(auth)/calls/[id]',
-        params: {
-          id: res.data.call_id,
-          url: res.data.daily_room_url,
-          token: res.data.daily_meeting_token,
-          name: res.data.client_name,
-          video: res.data.is_video ? '1' : '0',
-          pronto: '1',
-        },
-      });
+      router.push({ pathname: '/(auth)/calls/[id]', params: res.params });
     } catch (e: any) {
       Alert.alert('Could not accept call', e?.message || 'Please try again.');
       RNCallKeep.endCall(callUUID);
@@ -123,7 +111,7 @@ export async function initCallKit(_userId: number): Promise<void> {
       return;
     }
     try {
-      await endProntoCall(callUUID, 'declined');
+      await declineIncomingCall(callUUID);
     } catch {
       // best-effort
     }
@@ -236,19 +224,10 @@ async function initAndroidCalls(): Promise<void> {
     }
     acceptedCallUUIDs.add(callUUID);
     try {
-      const res = await acceptProntoCall(callUUID);
+      // GeniusLaw client call or Pronto call — resolved by call id.
+      const res = await acceptIncomingCall(callUUID);
       if (!res.ok) throw new Error(res.message);
-      router.push({
-        pathname: '/(auth)/calls/[id]',
-        params: {
-          id: res.data.call_id,
-          url: res.data.daily_room_url,
-          token: res.data.daily_meeting_token,
-          name: res.data.client_name,
-          video: res.data.is_video ? '1' : '0',
-          pronto: '1',
-        },
-      });
+      router.push({ pathname: '/(auth)/calls/[id]', params: res.params });
     } catch (e: any) {
       console.warn('[callKit] (android) accept failed', e);
       try {
@@ -272,7 +251,7 @@ async function initAndroidCalls(): Promise<void> {
     }
     console.log('[callKit] (android) endCall', callUUID);
     try {
-      await endProntoCall(callUUID, 'declined');
+      await declineIncomingCall(callUUID);
     } catch (e) {
       console.warn('[callKit] (android) endCall API failed', e);
     }

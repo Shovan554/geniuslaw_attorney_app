@@ -1,13 +1,32 @@
 jest.mock('../cases', () => ({
   getOrderById: jest.fn(),
 }));
+jest.mock('../messages', () => ({
+  getConversations: jest.fn(),
+}));
 
 import type { Router } from 'expo-router';
 
 import { getOrderById } from '../cases';
+import { getConversations } from '../messages';
 import { routeFromNotificationData } from '../notifications';
 
 const mockGetOrderById = getOrderById as jest.MockedFunction<typeof getOrderById>;
+const mockGetConversations = getConversations as jest.MockedFunction<typeof getConversations>;
+
+function conv(id: string, clientId: number | null) {
+  return {
+    id,
+    client_id: clientId,
+    client_name: null,
+    client_email: null,
+    last_message_preview: null,
+    last_message_at: null,
+    unread_count: 0,
+    created_at: 0,
+    updated_at: 0,
+  };
+}
 
 function makeRouter() {
   const push = jest.fn();
@@ -17,6 +36,41 @@ function makeRouter() {
 describe('routeFromNotificationData', () => {
   beforeEach(() => {
     mockGetOrderById.mockReset();
+    mockGetConversations.mockReset();
+  });
+
+  // Client-message pushes (from the client app and the web portal) carry the
+  // client's id, not the conversation uuid — resolve it to the thread.
+  it('opens the conversation with that client for a message push', async () => {
+    mockGetConversations.mockResolvedValue({
+      ok: true,
+      data: { conversations: [conv('c-other', 2), conv('c-anthony', 1)] },
+    });
+    const { router, push } = makeRouter();
+    await routeFromNotificationData(router, {
+      genre: 'client',
+      link_type: 'messages',
+      link_id: 1,
+    });
+    expect(push).toHaveBeenCalledWith('/(auth)/messages/c-anthony');
+  });
+
+  it('opens the inbox when the message push has no matching conversation', async () => {
+    mockGetConversations.mockResolvedValue({ ok: true, data: { conversations: [conv('c', 2)] } });
+    const missing = makeRouter();
+    await routeFromNotificationData(missing.router, { genre: 'client', link_type: 'messages', link_id: 1 });
+    expect(missing.push).toHaveBeenCalledWith('/(auth)/messages');
+
+    mockGetConversations.mockResolvedValue({ ok: false, message: 'Network error' });
+    const offline = makeRouter();
+    await routeFromNotificationData(offline.router, { genre: 'client', link_type: 'messages', link_id: 1 });
+    expect(offline.push).toHaveBeenCalledWith('/(auth)/messages');
+  });
+
+  it('opens the client for a client document push', async () => {
+    const { router, push } = makeRouter();
+    await routeFromNotificationData(router, { genre: 'client', link_type: 'documents', link_id: 7 });
+    expect(push).toHaveBeenCalledWith('/(auth)/clients/7');
   });
 
   it('opens the tapped case directly for a case push', async () => {

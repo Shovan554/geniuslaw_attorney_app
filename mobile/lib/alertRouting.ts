@@ -1,6 +1,7 @@
 import type { Cta } from './alerts';
 import { routeForGenre } from './alerts';
 import { getOrderById } from './cases';
+import { getConversations } from './messages';
 
 /**
  * Turns a CTA into the routes to push, hitting the network only when the CTA
@@ -27,6 +28,15 @@ export async function resolveCtaRoutes(
       const order = `/(auth)/cases/${res.data.case_id}/orders/${cta.orderId}`;
       return cta.orderSubroute ? [order, `${order}/${cta.orderSubroute}`] : [order];
     }
+  }
+
+  // Message alerts know the client, not the conversation — find the thread.
+  if (cta.clientId != null) {
+    const res = await getConversations();
+    const conv = res.ok
+      ? res.data.conversations.find((c) => c.client_id === cta.clientId)
+      : undefined;
+    return [conv ? `/(auth)/messages/${conv.id}` : '/(auth)/messages'];
   }
 
   // Lookup failed (deleted order, no network, signed out) — land the attorney

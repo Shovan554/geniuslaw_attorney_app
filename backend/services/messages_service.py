@@ -9,6 +9,7 @@ from models.message import (
     MessageableClient,
     MessageItem,
 )
+from services.message_notifications import notify_client_of_message
 from services.supabase_client import get_supabase
 
 
@@ -454,13 +455,14 @@ def send_message_for_user(
     sb = get_supabase()
     conv_resp = (
         sb.table("conversations")
-        .select("id")
+        .select("id,client_id")
         .eq("id", conversation_id)
         .eq("firm_id", firm_id)
         .limit(1)
         .execute()
     )
-    if not (conv_resp.data or []):
+    conv_rows = conv_resp.data or []
+    if not conv_rows:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found.")
 
     now = int(time.time())
@@ -481,6 +483,8 @@ def send_message_for_user(
     sb.table("conversation_participants").update({"last_read_at": now}).eq(
         "conversation_id", conversation_id
     ).eq("user_id", user_id).execute()
+
+    notify_client_of_message(sb, conv_rows[0].get("client_id"), user_id, body)
 
     return MessageItem(
         id=message_id,
