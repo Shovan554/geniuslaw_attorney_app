@@ -56,6 +56,75 @@ FirebaseApp.configure()
   }
 }
 
+// UIScene lifecycle (required when building with the iOS 27 SDK — without it
+// UIKit kills the app at launch with
+// UIApplicationEvaluateRuntimeIssueForNoSceneLifecycleAdoption / SIGTRAP).
+//
+// AppDelegate still creates the UIWindow and starts React Native in it during
+// didFinishLaunching, because several libraries read
+// `UIApplication.shared.delegate.window` at launch (expo-dev-launcher,
+// Stripe Identity, RNFB messaging). Here we attach that same window to the
+// scene once it connects, and forward URL / user-activity events — which
+// UIKit now delivers to the scene instead of the app delegate — back to the
+// AppDelegate handlers so Expo subscribers and RCTLinkingManager still see them.
+class SceneDelegate: UIResponder, UIWindowSceneDelegate {
+  var window: UIWindow?
+
+  private var appDelegate: AppDelegate? {
+    UIApplication.shared.delegate as? AppDelegate
+  }
+
+  func scene(
+    _ scene: UIScene,
+    willConnectTo session: UISceneSession,
+    options connectionOptions: UIScene.ConnectionOptions
+  ) {
+    guard let windowScene = scene as? UIWindowScene, let appDelegate = appDelegate else { return }
+
+    let window: UIWindow
+    if let existing = appDelegate.window {
+      window = existing
+    } else {
+      // Should not happen (AppDelegate always creates the window), but never
+      // leave the user on a blank screen.
+      window = UIWindow(windowScene: windowScene)
+      appDelegate.window = window
+      appDelegate.reactNativeFactory?.startReactNative(withModuleName: "main", in: window, launchOptions: nil)
+    }
+    window.windowScene = windowScene
+    window.frame = windowScene.coordinateSpace.bounds
+    self.window = window
+    window.makeKeyAndVisible()
+
+    // Cold-start deep links / universal links arrive here instead of the app delegate.
+    if !connectionOptions.urlContexts.isEmpty {
+      self.scene(scene, openURLContexts: connectionOptions.urlContexts)
+    }
+    if let activity = connectionOptions.userActivities.first {
+      self.scene(scene, continue: activity)
+    }
+  }
+
+  func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
+    guard let appDelegate = appDelegate else { return }
+    for context in URLContexts {
+      var options: [UIApplication.OpenURLOptionsKey: Any] = [:]
+      if let source = context.options.sourceApplication {
+        options[.sourceApplication] = source
+      }
+      if let annotation = context.options.annotation {
+        options[.annotation] = annotation
+      }
+      options[.openInPlace] = context.options.openInPlace
+      _ = appDelegate.application(UIApplication.shared, open: context.url, options: options)
+    }
+  }
+
+  func scene(_ scene: UIScene, continue userActivity: NSUserActivity) {
+    _ = appDelegate?.application(UIApplication.shared, continue: userActivity, restorationHandler: { _ in })
+  }
+}
+
 class ReactNativeDelegate: ExpoReactNativeFactoryDelegate {
   // Extension point for config-plugins
 
